@@ -1,0 +1,15 @@
+ollama list
+NAME                                             ID              SIZE      MODIFIED          
+hf.co/mradermacher/WeVisOne-VL-2B-GGUF:Q4_K_M    170bec1a5b56    1.7 GB    About an hour ago    
+nemotron-3.5-bolt:e4b                            fe4af3f5907b    7.2 GB    About an hour ago    
+SparkLLM/Spark-X2.6-4B:q4_k_m                    79b18078ed8a    3.5 GB    About an hour ago    
+lfm3:latest                                      f609fc0ab12a    1.7 GB    About an hour ago    
+moondream:1.8b                                   55fc3abd3867    1.7 GB    9 hours ago          
+x/flux2-klein:4b                                 50a0c0ab15ac    5.7 GB    9 hours ago          
+all-minilm:latest                                1b226e2802db    45 MB     9 hours ago          
+gemma2:2b                                        8ccf136fdd52    1.6 GB    9 hours ago          
+deepseek-r1:1.5b                                 e0979632db5a    1.1 GB    9 hours ago          
+llama3.2:3b                                      a80c4f17acd5    2.0 GB    9 hours ago          
+qwen2.5:3b                                       357c53fb659c    1.9 GB    9 hours ago          
+phi4-mini:latest                                 78fad5d182a7    2.5 GB    9 hours ago          
+qwen2.5-coder:3b                                 f72c60cabf62    1.9 GB    9 hours ago     

@@ -1,0 +1,27 @@
+/target
+.DS_Store
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+data/*.db*
+data/models/*.gguf*
+static/uploads/
+data/models/
+data/llamacpp-models.json
+data/llama-server.log
+data/bin/
+/dist/
+/desktop/gen/
+
+# Never commit personal data, downloads or build output.
+/bin/
+data/*
+!data/list.txt
+!data/llamacpp-models.example.json
+static/generated/
+static/uploads/
+*.profraw
+*.log
+*.code-workspace

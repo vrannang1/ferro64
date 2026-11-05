@@ -1,0 +1,4 @@
+Instrument Serif, Geist and Geist Mono are licensed under the SIL Open Font License 1.1.
+https://openfontlicense.org
+Instrument Serif (c) The Instrument Serif Project Authors; Geist and Geist Mono (c) Vercel.
+Latin subsets served from Google Fonts, vendored so the app makes no network requests.

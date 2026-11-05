@@ -1,0 +1,13 @@
+[
+  {
+    "id": "qwen2.5:3b",
+    "name": "Qwen 2.5 3B Instruct",
+    "path": "models/qwen2.5-3b-instruct-q4_k_m.gguf"
+  },
+  {
+    "id": "my-vision-model",
+    "name": "My vision model",
+    "path": "/absolute/path/to/vision-model.gguf",
+    "mmproj": "/absolute/path/to/matching-mmproj.gguf"
+  }
+]
