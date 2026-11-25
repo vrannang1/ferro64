@@ -542,7 +542,7 @@ pub fn shell_command(command: &str) -> tokio::process::Command {
 }
 
 /// Stops a command and everything it started.
-fn kill_tree(pid: u32) {
+pub(crate) fn kill_tree(pid: u32) {
     #[cfg(windows)]
     let _ = std::process::Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"]).status();
     #[cfg(not(windows))]
@@ -687,7 +687,7 @@ fn is_local_url(url: &str) -> bool {
 }
 
 /// A Chromium browser already on this machine. Ferro64 does not ship or install one.
-fn find_browser() -> Option<PathBuf> {
+pub(crate) fn find_browser() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     let fixed = vec![
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -714,7 +714,7 @@ fn find_browser() -> Option<PathBuf> {
 }
 
 /// The words a person would see, from a page's final HTML.
-fn visible_text(html: &str) -> String {
+pub(crate) fn visible_text(html: &str) -> String {
     const HIDDEN: &[&str] = &["head", "script", "style", "svg", "noscript", "template"];
     let lower = html.to_ascii_lowercase();
     let mut text = String::new();
@@ -1248,7 +1248,7 @@ impl Coder {
         if let Some(id) = requested {
             return chat.iter().find(|m| m.id == id).map(|m| m.id.clone()).ok_or_else(|| format!("'{id}' is not an installed chat model"));
         }
-        ["qwen3.6:35b-a3b", "qwen3.5:35b-a3b", "glm-4.7-flash", "qwen3.5:9b"]
+        ["qwen3.6:35b-a3b", "inkling-2-mini:26b", "devstral-small-2:24b", "qwen3.5:9b"]
             .iter()
             .find_map(|id| chat.iter().find(|m| m.id == *id))
             .or_else(|| chat.first())

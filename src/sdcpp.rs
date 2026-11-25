@@ -11,15 +11,24 @@ pub enum ImageModel {
     FluxKlein,
     /// Z-Image-Turbo: very realistic photos in 8 steps.
     ZImageTurbo,
+    /// FLUX.1 schnell: 4 steps, prompts read by T5 and CLIP (no Qwen).
+    Flux1Schnell,
+    /// SD 3.5 Large Turbo: 4 steps, prompts read by T5 and two CLIPs.
+    Sd35Turbo,
+    /// SDXL 1.0: older and lighter, its own CLIP inside.
+    Sdxl,
 }
 
 impl ImageModel {
-    pub const ALL: [ImageModel; 2] = [ImageModel::ZImageTurbo, ImageModel::FluxKlein];
+    pub const ALL: [ImageModel; 5] = [ImageModel::ZImageTurbo, ImageModel::FluxKlein, ImageModel::Flux1Schnell, ImageModel::Sd35Turbo, ImageModel::Sdxl];
 
     pub fn id(self) -> &'static str {
         match self {
             ImageModel::FluxKlein => "flux2-klein",
             ImageModel::ZImageTurbo => "z-image-turbo",
+            ImageModel::Flux1Schnell => "flux1-schnell",
+            ImageModel::Sd35Turbo => "sd35-turbo",
+            ImageModel::Sdxl => "sdxl",
         }
     }
 
@@ -31,6 +40,9 @@ impl ImageModel {
         match self {
             ImageModel::FluxKlein => "FLUX.2 Klein 4B",
             ImageModel::ZImageTurbo => "Z-Image-Turbo",
+            ImageModel::Flux1Schnell => "FLUX.1 schnell",
+            ImageModel::Sd35Turbo => "SD 3.5 Large Turbo",
+            ImageModel::Sdxl => "SDXL 1.0",
         }
     }
 
@@ -39,15 +51,19 @@ impl ImageModel {
         match self {
             ImageModel::FluxKlein => "image:flux2-klein-4b",
             ImageModel::ZImageTurbo => "image:z-image-turbo",
+            ImageModel::Flux1Schnell => "image:flux1-schnell",
+            ImageModel::Sd35Turbo => "image:sd3.5-large-turbo",
+            ImageModel::Sdxl => "image:sdxl",
         }
     }
 
-    /// Both models need sides divisible by 16 and are trained near 1 megapixel.
+    /// Every model needs sides divisible by 16 and is trained near 1
+    /// megapixel; these sizes are among SDXL's training shapes too.
     pub fn size(self, aspect: &str) -> Option<(u32, u32)> {
-        Some(match (self, aspect) {
-            (ImageModel::FluxKlein | ImageModel::ZImageTurbo, "1:1") => (1024, 1024),
-            (ImageModel::FluxKlein | ImageModel::ZImageTurbo, "16:9") => (1344, 768),
-            (ImageModel::FluxKlein | ImageModel::ZImageTurbo, "9:16") => (768, 1344),
+        Some(match aspect {
+            "1:1" => (1024, 1024),
+            "16:9" => (1344, 768),
+            "9:16" => (768, 1344),
             _ => return None,
         })
     }
@@ -80,6 +96,16 @@ fn text_encoder() -> Option<PathBuf> {
     let entry = crate::model_store::catalog_entry("qwen3:4b")?;
     let path = base_dir().join("data/models").join(entry.local_model());
     path.is_file().then_some(path)
+}
+
+/// A prompt reader in the image folder, by file and catalog name.
+fn reader(file: &str, name: &str, model: ImageModel) -> Result<String, String> {
+    let path = image_dir().join(file);
+    if path.is_file() {
+        Ok(path.display().to_string())
+    } else {
+        Err(format!("{} reads prompts with {name}. Download {name} in Models first.", model.label()))
+    }
 }
 
 struct Files {
@@ -135,6 +161,52 @@ fn files(model: ImageModel) -> Result<Files, String> {
                 "8".into(),
                 "--diffusion-fa".into(),
             ],
+            ImageModel::Flux1Schnell => vec![
+                "--diffusion-model".into(),
+                need("flux1-schnell-q8_0.gguf")?,
+                "--vae".into(),
+                need("ae.safetensors")?,
+                "--clip_l".into(),
+                reader("clip_l.safetensors", "CLIP-L", model)?,
+                "--t5xxl".into(),
+                reader("t5-v1_1-xxl-encoder-Q8_0.gguf", "T5-XXL", model)?,
+                "--cfg-scale".into(),
+                "1.0".into(),
+                "--steps".into(),
+                "4".into(),
+                "--sampling-method".into(),
+                "euler".into(),
+                "--diffusion-fa".into(),
+            ],
+            // The file holds the decoder as well.
+            ImageModel::Sd35Turbo => vec![
+                "-m".into(),
+                need("sd3.5_large_turbo-q8_0.gguf")?,
+                "--clip_l".into(),
+                reader("clip_l.safetensors", "CLIP-L", model)?,
+                "--clip_g".into(),
+                reader("clip_g.safetensors", "CLIP-G", model)?,
+                "--t5xxl".into(),
+                reader("t5-v1_1-xxl-encoder-Q8_0.gguf", "T5-XXL", model)?,
+                "--cfg-scale".into(),
+                "1.0".into(),
+                "--steps".into(),
+                "4".into(),
+                "--sampling-method".into(),
+                "euler".into(),
+            ],
+            ImageModel::Sdxl => vec![
+                "-m".into(),
+                need("sd_xl_base_1.0.safetensors")?,
+                "--vae".into(),
+                need("sdxl_vae.safetensors")?,
+                "--cfg-scale".into(),
+                "6.0".into(),
+                "--steps".into(),
+                "25".into(),
+                "--sampling-method".into(),
+                "euler_a".into(),
+            ],
         },
     })
 }
@@ -156,6 +228,11 @@ fn fit_megapixel(w: u32, h: u32) -> (u32, u32) {
 /// Which image models have their weights (and, for FLUX, the text encoder).
 pub fn ready(model: ImageModel) -> bool {
     files(model).is_ok()
+}
+
+/// What is missing for a model to run, in words for the page.
+pub fn missing(model: ImageModel) -> Option<String> {
+    files(model).err()
 }
 
 pub async fn generate(

@@ -6,17 +6,29 @@
 <meta name="description" content="A private workspace for local models: chat, documents, images and multi-model workflows on {{ engine }}.">
 <meta name="color-scheme" content="dark light">
 <title>Ferro64</title>
-<link rel="preload" href="/static/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/static/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/host-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/atkinson-hyperlegible-mono.woff2" as="font" type="font/woff2" crossorigin>
+<script>
+/* Light, Dark or System, applied before the page draws so it never flashes. */
+(function () {
+  var mode; try { mode = localStorage.getItem('ferro64.theme'); } catch (e) {}
+  if (mode === 'day') mode = 'light'; if (mode === 'night') mode = 'dark';
+  if (mode !== 'light' && mode !== 'dark') mode = 'system';
+  var light = mode === 'light' || (mode === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
+  document.documentElement.dataset.theme = light ? 'day' : 'night';
+  document.documentElement.dataset.themeMode = mode;
+})();
+</script>
 <link rel="stylesheet" href="/static/styles.css?v={{ version }}">
 <script type="application/json" id="boot">{{ boot_json | safe }}</script>
 <script src="/static/app.js?v={{ version }}" defer></script>
 <script src="/static/code.js?v={{ version }}" defer></script>
 {% if api_models %}<script src="/static/hosted.js?v={{ version }}" defer></script>{% endif %}
 <script src="/static/video.js?v={{ version }}" defer></script>
+<script src="/static/assistant.js?v={{ version }}" defer></script>
 </head>
 <body>
-<!-- lumen: night / day · hallmark theme for an inference console -->
+<!-- console: graphite / paper · hallmark theme, Light, Dark or System -->
 <svg class="icons" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
 <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12Z"/></symbol>
 <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8Z"/><path d="M14 3v5h5M8.5 13h7M8.5 16.5h5"/></symbol>
@@ -42,12 +54,14 @@
 <symbol id="i-chev" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
 <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
 <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+<symbol id="i-display" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="12" rx="1.5"/><path d="M9 20h6M12 16.5V20"/></symbol>
 <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.6 6.6 0 0 0 10.5 10.5Z"/></symbol>
 <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5 13.8 10l6.7 2-6.7 2L12 20.5 10.2 14l-6.7-2 6.7-2L12 3.5Z"/></symbol>
 <symbol id="i-eject" viewBox="0 0 24 24"><path d="m12 5 7 8H5l7-8ZM5 18h14"/></symbol>
 <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5L8 5.5Z"/></symbol>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></symbol>
 <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/></symbol>
 <symbol id="i-brain" viewBox="0 0 24 24"><path d="M9 4.5a3 3 0 0 0-3 3v.3A3 3 0 0 0 4.5 13a3 3 0 0 0 2 4.8A2.8 2.8 0 0 0 12 18V6a2.5 2.5 0 0 0-3-1.5ZM15 4.5a3 3 0 0 1 3 3v.3a3 3 0 0 1 1.5 5.2 3 3 0 0 1-2 4.8A2.8 2.8 0 0 1 12 18"/></symbol>
 </defs></svg>
 
@@ -59,39 +73,40 @@
       <button class="icon-btn rail__close" id="rail-close" aria-label="Close navigation"><svg><use href="#i-x"/></svg></button>
     </div>
     <nav class="nav" aria-label="Views">
-      <button class="nav__item" data-view="chat"><svg><use href="#i-chat"/></svg><span>chat</span><kbd>⌥1</kbd></button>
-      <button class="nav__item" data-view="documents"><svg><use href="#i-doc"/></svg><span>documents</span><kbd>⌥2</kbd></button>
-      <button class="nav__item" data-view="images"><svg><use href="#i-image"/></svg><span>images</span><kbd>⌥3</kbd></button>
-      <button class="nav__item" data-view="video"><svg><use href="#i-film"/></svg><span>video</span><kbd>⌥4</kbd></button>
-      <button class="nav__item" data-view="agents"><svg><use href="#i-agent"/></svg><span>agents</span><kbd>⌥5</kbd></button>
-      <button class="nav__item" data-view="code"><svg><use href="#i-code"/></svg><span>code</span><kbd>⌥6</kbd></button>
-      <button class="nav__item" data-view="settings"><svg><use href="#i-gear"/></svg><span>settings</span><kbd>⌥7</kbd></button>
-      {% if api_models %}<button class="nav__item" data-view="api"><svg><use href="#i-agent"/></svg><span>api models</span><kbd>⌥8</kbd></button>{% endif %}
+      <button class="nav__item" data-view="chat"><svg><use href="#i-chat"/></svg><span>Chat</span><kbd>⌥1</kbd></button>
+      <button class="nav__item" data-view="documents"><svg><use href="#i-doc"/></svg><span>Documents</span><kbd>⌥2</kbd></button>
+      <button class="nav__item" data-view="images"><svg><use href="#i-image"/></svg><span>Images</span><kbd>⌥3</kbd></button>
+      <button class="nav__item" data-view="video"><svg><use href="#i-film"/></svg><span>Video</span><kbd>⌥4</kbd></button>
+      <button class="nav__item" data-view="agents"><svg><use href="#i-agent"/></svg><span>Agents</span><kbd>⌥5</kbd></button>
+      <button class="nav__item" data-view="assistant"><svg><use href="#i-compass"/></svg><span>Assistant</span><kbd>⌥9</kbd></button>
+      <button class="nav__item" data-view="code"><svg><use href="#i-code"/></svg><span>Code</span><kbd>⌥6</kbd></button>
+      <button class="nav__item" data-view="settings"><svg><use href="#i-gear"/></svg><span>Settings</span><kbd>⌥7</kbd></button>
+      {% if api_models %}<button class="nav__item" data-view="api"><svg><use href="#i-agent"/></svg><span>API models</span><kbd>⌥8</kbd></button>{% endif %}
     </nav>
     <div class="threads">
       <div class="threads__head">
-        <span class="label">conversations</span>
+        <span class="label">Conversations</span>
         <button class="icon-btn" id="new-chat" title="New conversation (⌘⇧O)" aria-label="New conversation"><svg><use href="#i-plus"/></svg></button>
       </div>
-      <label class="threads__search"><svg><use href="#i-search"/></svg><span class="visually-hidden">Search conversations</span><input id="thread-search" type="search" placeholder="search" autocomplete="off"></label>
+      <label class="threads__search"><svg><use href="#i-search"/></svg><span class="visually-hidden">Search conversations</span><input id="thread-search" type="search" placeholder="Search" autocomplete="off"></label>
       <div class="threads__list" id="thread-list" role="list"></div>
     </div>
     <div class="runtime" id="runtime">
-      <div class="runtime__line"><span class="dot" id="runtime-dot"></span><span class="readout" id="runtime-engine">{{ engine }}</span><button class="icon-btn" id="theme-toggle" aria-label="Switch light or dark" title="Switch light or dark"><svg><use href="#i-sun"/></svg></button></div>
-      <div class="readout runtime__model" id="runtime-model">nothing resident</div>
+      <div class="runtime__line"><span class="dot" id="runtime-dot"></span><span class="readout" id="runtime-engine">{{ engine }}</span><button class="icon-btn" id="theme-toggle" aria-label="Appearance: system" title="Appearance: system (click for light, dark or system)"><svg><use href="#i-display"/></svg></button></div>
+      <div class="readout runtime__model" id="runtime-model">Nothing resident</div>
       <div class="readout runtime__meta">ctx {{ context_size }} · keep {{ keep_alive }}</div>
     </div>
   </aside>
   <div class="scrim" id="scrim" hidden></div>
 
   <main class="main" id="main" tabindex="-1">
-    <div class="banner" id="banner" hidden role="alert"><span id="banner-text"></span><button class="btn btn--ghost btn--xs" id="banner-action">retry</button></div>
+    <div class="banner" id="banner" hidden role="alert"><span id="banner-text"></span><button class="btn btn--ghost btn--xs" id="banner-action">Retry</button></div>
 
     <!-- chat -->
     <section class="view view--chat" id="view-chat" data-title="chat">
       <header class="topbar">
         <button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button>
-        <h1 class="topbar__title" id="chat-title">new conversation</h1>
+        <h1 class="topbar__title" id="chat-title">New conversation</h1>
         <span class="state" id="chat-state" hidden><span class="dot dot--live"></span><span id="chat-state-text">ready</span></span>
       </header>
       <div class="log" id="chat-log" aria-live="polite" aria-busy="false"></div>
@@ -108,16 +123,16 @@
               <div class="picker__menu" id="picker-menu" role="listbox" aria-label="Chat model" hidden></div>
             </div>
             <button type="button" class="switch" id="thinking" role="switch" aria-checked="false" title="Let the model reason before answering">
-              <span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">thinking</span>
+              <span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">Thinking</span>
             </button>
             <button type="button" class="switch" id="web" role="switch" aria-checked="false" title="Search the web and answer from the pages found">
-              <span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">web</span>
+              <span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">Web</span>
             </button>
             <div class="segmented" id="effort" role="radiogroup" aria-label="Effort">
-              {% for e in efforts %}<button type="button" role="radio" aria-checked="false" data-effort="{{ e.value }}" title="{{ e.guidance }} Up to {{ e.tokens }} tokens.">{{ e.value }}</button>{% endfor %}
+              {% for e in efforts %}<button type="button" role="radio" aria-checked="false" data-effort="{{ e.value }}" title="{{ e.guidance }} Up to {{ e.tokens }} tokens.">{{ e.value | capitalize }}</button>{% endfor %}
             </div>
             <div class="segmented" id="temperature" role="radiogroup" aria-label="Temperature">
-              {% for t in temperatures %}<button type="button" role="radio" aria-checked="false" data-temperature="{{ t.value }}" title="Temperature {{ t.temperature }}. Changes how varied the wording is, not what the model knows.">{{ t.value }}</button>{% endfor %}
+              {% for t in temperatures %}<button type="button" role="radio" aria-checked="false" data-temperature="{{ t.value }}" title="Temperature {{ t.temperature }}. Changes how varied the wording is, not what the model knows.">{{ t.value | capitalize }}</button>{% endfor %}
             </div>
           </div>
           <div class="composer__actions">
@@ -131,21 +146,21 @@
 
     <!-- documents -->
     <section class="view view--page" id="view-documents" data-title="documents" hidden>
-      <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button><span class="readout">ocr · apple vision + pdfkit · on device</span></header>
+      <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button><span class="readout">Ocr · apple vision + pdfkit · on device</span></header>
       <div class="page">
-        <div class="page__head"><h2>read a document</h2><p class="lead">Extract text from a photo, scan or PDF, check it, then take it into a conversation.</p></div>
+        <div class="page__head"><h2>Read a document</h2><p class="lead">Extract text from a photo, scan or PDF, check it, then take it into a conversation.</p></div>
         <div class="split">
           <div class="well well--pad">
             <label class="drop" id="drop" tabindex="0">
               <input type="file" id="ocr-file" accept="image/png,image/jpeg,image/webp,application/pdf" hidden>
-              <svg><use href="#i-down"/></svg><strong>drop a file or browse</strong><span class="readout">png · jpeg · webp · pdf · up to 18 mb</span>
+              <svg><use href="#i-down"/></svg><strong>Drop a file or browse</strong><span class="readout">Png · jpeg · webp · pdf · up to 18 mb</span>
             </label>
             <div class="preview" id="ocr-preview" hidden></div>
-            <div class="row row--end"><span class="readout grow" id="ocr-name">no file</span><button class="btn btn--primary" id="ocr-run" disabled>extract text</button></div>
+            <div class="row row--end"><span class="readout grow" id="ocr-name">No file</span><button class="btn btn--primary" id="ocr-run" disabled>Extract text</button></div>
           </div>
           <div class="well well--pad">
             <textarea class="field field--mono" id="ocr-text" rows="16" placeholder="Extracted text appears here. You can edit it before using it." aria-label="Extracted text"></textarea>
-            <div class="row row--end"><span class="readout grow" id="ocr-meta">nothing extracted yet</span><button class="btn btn--ghost" id="ocr-copy" disabled>copy</button><button class="btn btn--ghost" id="ocr-chat" disabled>ask about it</button></div>
+            <div class="row row--end"><span class="readout grow" id="ocr-meta">Nothing extracted yet</span><button class="btn btn--ghost" id="ocr-copy" disabled>Copy</button><button class="btn btn--ghost" id="ocr-chat" disabled>Ask about it</button></div>
           </div>
         </div>
       </div>
@@ -153,103 +168,169 @@
 
     <!-- images -->
     <section class="view view--page" id="view-images" data-title="images" hidden>
-      <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button><span class="readout" id="image-backend">image engine · text models unload first</span></header>
+      <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button><span class="readout" id="image-backend">Image engine · text models unload first</span></header>
       <div class="page">
-        <div class="page__head"><h2>make an image</h2><p class="lead">Describe it plainly: a shoe, a table, a corner of the garden. It runs on this machine and nothing is uploaded.</p></div>
+        <div class="page__head"><h2>Make an image</h2><p class="lead">Describe it plainly: a shoe, a table, a corner of the garden. It runs on this machine and nothing is uploaded.</p></div>
         <div class="split split--studio">
           <form class="well well--pad" id="image-form">
             <div class="editing" id="editing" hidden>
               <img id="editing-img" alt="Image being edited">
-              <div class="grow"><span class="label">editing</span><p class="readout" id="editing-name"></p></div>
+              <div class="grow"><span class="label">Editing</span><p class="readout" id="editing-name"></p></div>
               <button type="button" class="icon-btn" id="editing-clear" aria-label="Stop editing" title="Stop editing"><svg><use href="#i-x"/></svg></button>
             </div>
-            <label class="label" for="image-prompt" id="image-prompt-label">prompt</label>
+            <label class="label" for="image-prompt" id="image-prompt-label">Prompt</label>
             <textarea class="field" id="image-prompt" rows="6" required placeholder="A ceramic cup on a sunlit oak table, soft morning light"></textarea>
-            <div class="row"><button type="button" class="btn btn--ghost btn--xs" id="enhance">refine prompt</button><button type="button" class="btn btn--ghost btn--xs" id="photo-button" title="Start from your own photo and describe a change">use a photo</button><input type="file" id="photo-file" accept="image/png,image/jpeg,image/webp" hidden></div>
+            <div class="row"><button type="button" class="btn btn--ghost btn--xs" id="enhance">Refine prompt</button><button type="button" class="btn btn--ghost btn--xs" id="photo-button" title="Start from your own photo and describe a change">Use a photo</button><input type="file" id="photo-file" accept="image/png,image/jpeg,image/webp" hidden></div>
             <div class="image-options" id="image-options">
-            <span class="label">model</span>
+            <span class="label">Model</span>
             <div class="segmented" id="image-model" role="radiogroup" aria-label="Image model">
-              <button type="button" role="radio" aria-checked="true" data-image-model="z-image-turbo" title="Z-Image-Turbo · 1024 px · realistic photos · about 2.5 minutes">z-image</button><button type="button" role="radio" aria-checked="false" data-image-model="flux2-klein" title="FLUX.2 Klein 4B · 1024 px · about a minute · also edits">flux</button>
+              <button type="button" role="radio" aria-checked="true" data-image-model="z-image-turbo" title="Z-Image-Turbo · 1024 px · realistic photos · about 2.5 minutes">Z-Image</button><button type="button" role="radio" aria-checked="false" data-image-model="flux2-klein" title="FLUX.2 Klein 4B · 1024 px · about a minute · also edits">FLUX.2</button><button type="button" role="radio" aria-checked="false" data-image-model="flux1-schnell" title="FLUX.1 schnell · 1024 px · 4 steps · no Qwen">FLUX.1</button><button type="button" role="radio" aria-checked="false" data-image-model="sd35-turbo" title="SD 3.5 Large Turbo · 1024 px · 4 steps · no Qwen">SD 3.5</button><button type="button" role="radio" aria-checked="false" data-image-model="sdxl" title="SDXL 1.0 · 1024 px · 25 steps · no Qwen">SDXL</button>
             </div>
             <p class="readout" id="image-model-note"></p>
-            <span class="label">aspect</span>
+            <span class="label">Aspect</span>
             <div class="segmented" id="aspect" role="radiogroup" aria-label="Aspect ratio">
               <button type="button" role="radio" aria-checked="true" data-aspect="1:1">1:1</button><button type="button" role="radio" aria-checked="false" data-aspect="16:9">16:9</button><button type="button" role="radio" aria-checked="false" data-aspect="9:16">9:16</button>
             </div>
             </div>
-            <button class="btn btn--primary btn--block" id="generate">generate</button>
+            <button class="btn btn--primary btn--block" id="generate">Generate</button>
           </form>
-          <div class="well canvas blueprint" id="canvas"><p class="readout">the image appears here</p></div>
+          <div class="well canvas blueprint" id="canvas"><p class="readout">The image appears here</p></div>
         </div>
-        <div class="section-head"><h3>gallery <span class="readout" id="gallery-count"></span></h3><button class="btn btn--ghost btn--xs" id="gallery-refresh">refresh</button></div>
+        <div class="section-head"><h3>Gallery <span class="readout" id="gallery-count"></span></h3><button class="btn btn--ghost btn--xs" id="gallery-refresh">Refresh</button></div>
         <div class="gallery" id="gallery"></div>
       </div>
     </section>
 
     <!-- video -->
     <section class="view view--page" id="view-video" data-title="video" hidden>
-      <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button><span class="readout">ltx-2.3 · mlx on this mac · one video at a time</span></header>
+      <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button><span class="readout">Ltx-2.3 · mlx on this mac · one video at a time</span></header>
       <div class="page">
-        <div class="page__head"><h2>make a video</h2><p class="lead">Describe a short shot: who, what moves, where, the light. It takes minutes, not seconds, and nothing leaves this machine.</p></div>
+        <div class="page__head"><h2>Make a video</h2><p class="lead">Describe a short shot: who, what moves, where, the light. It takes minutes, not seconds, and nothing leaves this machine.</p></div>
         <p class="empty" id="video-engine" hidden>The video engine is not built yet. Run <code>scripts/setup-video.sh</code> once (it needs Xcode), then reload.</p>
         <div class="split split--studio">
           <form class="well well--pad" id="video-form">
             <div class="editing" id="video-start" hidden>
               <img id="video-start-img" alt="Starting picture">
-              <div class="grow"><span class="label">starts from</span><p class="readout" id="video-start-name"></p></div>
+              <div class="grow"><span class="label">Starts from</span><p class="readout" id="video-start-name"></p></div>
               <button type="button" class="icon-btn" id="video-start-clear" aria-label="Start from text only" title="Start from text only"><svg><use href="#i-x"/></svg></button>
             </div>
-            <label class="label" for="video-prompt">prompt</label>
+            <label class="label" for="video-prompt">Prompt</label>
             <textarea class="field" id="video-prompt" rows="6" required placeholder="A golden retriever runs through a sunlit meadow toward the camera, tall grass swaying, warm evening light"></textarea>
-            <div class="row"><button type="button" class="btn btn--ghost btn--xs" id="video-photo" title="Animate your own photo">start from a photo</button><input type="file" id="video-photo-file" accept="image/png,image/jpeg,image/webp" hidden></div>
+            <div class="row"><button type="button" class="btn btn--ghost btn--xs" id="video-photo" title="Animate your own photo">Start from a photo</button><input type="file" id="video-photo-file" accept="image/png,image/jpeg,image/webp" hidden></div>
             <div class="image-options">
-              <span class="label">shape</span>
+              <span class="label">Shape</span>
               <div class="segmented" id="video-aspect" role="radiogroup" aria-label="Shape">
                 <button type="button" role="radio" aria-checked="true" data-aspect="16:9">16:9</button><button type="button" role="radio" aria-checked="false" data-aspect="9:16">9:16</button><button type="button" role="radio" aria-checked="false" data-aspect="1:1">1:1</button>
               </div>
-              <span class="label">length</span>
+              <span class="label">Length</span>
               <div class="segmented" id="video-seconds" role="radiogroup" aria-label="Length">
                 <button type="button" role="radio" aria-checked="false" data-seconds="2">2 s</button><button type="button" role="radio" aria-checked="true" data-seconds="4">4 s</button><button type="button" role="radio" aria-checked="false" data-seconds="6">6 s</button><button type="button" role="radio" aria-checked="false" data-seconds="8">8 s</button><button type="button" role="radio" aria-checked="false" data-seconds="10" title="The longest LTX-2.3 clip; takes the longest to make">10 s</button>
               </div>
               <div class="row row--wrap">
-                <button type="button" class="switch" id="video-audio" role="switch" aria-checked="false" title="Generate sound with the picture"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">sound</span></button>
-                <button type="button" class="switch" id="video-enhance" role="switch" aria-checked="false" title="Gemma rewrites the prompt in the detailed, step-by-step style LTX follows best, looking at the starting picture too. Adds about a minute."><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">refine prompt · +1 min</span></button>
+                <button type="button" class="switch" id="video-audio" role="switch" aria-checked="false" title="Generate sound with the picture"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">Sound</span></button>
+                <button type="button" class="switch" id="video-enhance" role="switch" aria-checked="false" title="Gemma rewrites the prompt in the detailed, step-by-step style LTX follows best, looking at the starting picture too. Adds about a minute."><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">Refine prompt · +1 min</span></button>
               </div>
             </div>
-            <button class="btn btn--primary btn--block" id="video-generate">make video</button>
+            <button class="btn btn--primary btn--block" id="video-generate">Make video</button>
           </form>
-          <div class="well canvas blueprint" id="video-canvas"><p class="readout">the video appears here</p></div>
+          <div class="well canvas blueprint" id="video-canvas"><p class="readout">The video appears here</p></div>
         </div>
-        <div class="section-head"><h3>videos <span class="readout" id="video-count"></span></h3><button class="btn btn--ghost btn--xs" id="video-refresh">refresh</button></div>
+        <div class="section-head"><h3>Videos <span class="readout" id="video-count"></span></h3><button class="btn btn--ghost btn--xs" id="video-refresh">Refresh</button></div>
         <div class="gallery" id="video-gallery"></div>
       </div>
     </section>
 
     <!-- agents -->
     <section class="view view--page" id="view-agents" data-title="agents" hidden>
-      <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button><span class="readout">draft → review → synthesis · one model at a time</span></header>
+      <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button><span class="readout">Draft → review → synthesis · one model at a time</span></header>
       <div class="page">
-        <div class="page__head"><h2>three passes, one answer</h2><p class="lead">A planner drafts, a reviewer challenges, a synthesizer writes the final result. Each stage can use a different model.</p></div>
+        <div class="page__head"><h2>Three passes, one answer</h2><p class="lead">A planner drafts, a reviewer challenges, a synthesizer writes the final result. Each stage can use a different model.</p></div>
         <form class="well well--pad" id="agent-form">
-          <label class="label" for="agent-goal">goal</label>
-          <textarea class="field" id="agent-goal" rows="4" required placeholder="What should the result be, and what context matters?"></textarea>
+          <label class="label" for="agent-goal">Goal</label>
+          <textarea class="field" id="agent-goal" rows="4" required placeholder="What should the result be, and what context matters? Attach a document or picture to have it analyzed."></textarea>
+          <div class="row row--wrap">
+            <button type="button" class="btn btn--ghost btn--xs" id="agent-attach-button"><svg aria-hidden="true"><use href="#i-clip"/></svg> Attach a document or image</button>
+            <input type="file" id="agent-file" hidden accept=".pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.xml,.html,.htm,.log,.yaml,.yml,.toml,.ini,.rs,.py,.js,.ts,.go,.java,.c,.cpp,.h,.cs,.swift,.rb,.php,.sh,.sql,.ex,.exs,.erl,.hs,image/png,image/jpeg,image/webp">
+            <span class="readout grow" id="agent-attachment">PDF, Word, text, code or a picture · read on this machine</span>
+            <button type="button" class="icon-btn" id="agent-attach-clear" aria-label="Remove attachment" hidden><svg><use href="#i-x"/></svg></button>
+          </div>
           <div class="stages">
-            <label class="stage"><span class="readout">01 · draft</span><select class="field" id="agent-planner"></select></label>
-            <label class="stage"><span class="readout">02 · review</span><select class="field" id="agent-reviewer"></select></label>
-            <label class="stage"><span class="readout">03 · synthesis</span><select class="field" id="agent-synth"></select></label>
+            <label class="stage"><span class="readout">01 · Draft</span><select class="field" id="agent-planner"></select></label>
+            <label class="stage"><span class="readout">02 · Review</span><select class="field" id="agent-reviewer"></select></label>
+            <label class="stage"><span class="readout">03 · Synthesis</span><select class="field" id="agent-synth"></select></label>
           </div>
           <div class="row row--wrap">
             <div class="segmented" id="agent-effort" role="radiogroup" aria-label="Agent effort">
-              {% for e in efforts %}<button type="button" role="radio" aria-checked="false" data-effort="{{ e.value }}">{{ e.value }}</button>{% endfor %}
+              {% for e in efforts %}<button type="button" role="radio" aria-checked="false" data-effort="{{ e.value }}">{{ e.value | capitalize }}</button>{% endfor %}
             </div>
-            <button type="button" class="switch" id="agent-thinking" role="switch" aria-checked="false"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">thinking</span></button>
+            <button type="button" class="switch" id="agent-thinking" role="switch" aria-checked="false"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">Thinking</span></button>
             <span class="grow"></span>
-            <button class="btn btn--primary" id="agent-run">run workflow</button>
+            <button class="btn btn--primary" id="agent-run">Run workflow</button>
           </div>
         </form>
         <div id="agent-live"></div>
-        <div class="section-head"><h3>recent runs</h3><button class="btn btn--ghost btn--xs" id="agent-refresh">refresh</button></div>
+        <div class="section-head"><h3>Recent runs</h3><button class="btn btn--ghost btn--xs" id="agent-refresh">Refresh</button></div>
         <div class="rows" id="agent-history"></div>
+      </div>
+    </section>
+
+    <!-- assistant -->
+    <section class="view view--page" id="view-assistant" data-title="assistant" hidden>
+      <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button><span class="readout">Standing jobs · reads the web · you decide</span></header>
+      <div class="page">
+        <div class="page__head"><h2>Your assistant</h2><p class="lead">Give it a standing job, like researching your stocks every weekday morning. It searches the web, reads the pages that matter, checks prices, and leaves you a report with its sources. It can only read: it has no access to a brokerage, so it cannot buy or sell anything. It suggests; you decide.</p></div>
+        <div class="section-head"><h3>Jobs</h3><button class="btn btn--ghost btn--xs" id="asst-new">New job</button></div>
+        <form class="well well--pad" id="asst-form" hidden>
+          <div class="row row--wrap"><label class="label grow" for="asst-name">Name</label><span class="readout">Templates</span><button type="button" class="btn btn--ghost btn--xs" id="asst-template">Stock research</button><button type="button" class="btn btn--ghost btn--xs" id="asst-template-list">Daily list as csv</button></div>
+          <input class="field" id="asst-name" maxlength="120" required placeholder="Morning stock research">
+          <label class="label" for="asst-instructions">What to do each time</label>
+          <textarea class="field" id="asst-instructions" rows="12" required placeholder="What it should look at, what you care about, and how the report should read."></textarea>
+          <div class="stages">
+            <label class="stage"><span class="readout">When</span><select class="field" id="asst-schedule"><option value="weekdays">Weekdays</option><option value="daily">Every day</option><option value="manual">Only when I press run</option></select></label>
+            <label class="stage"><span class="readout">At</span><input class="field" id="asst-time" type="time" value="07:30"></label>
+            <label class="stage"><span class="readout">Model</span><select class="field" id="asst-model"></select></label>
+          </div>
+          <div class="row row--wrap">
+            <button type="button" class="switch" id="asst-table" role="switch" aria-checked="false"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">Save a table as csv</span></button>
+            <span class="readout grow" id="asst-table-note">Rows are matched on the first two columns, so a later run never saves the same one twice</span>
+          </div>
+          <input class="field" id="asst-columns" hidden placeholder="name, specialty, hospital or clinic, area, city, phone, source url" aria-label="table columns">
+          <div id="asst-notes" hidden></div>
+          <div class="row row--wrap">
+            <button type="button" class="switch" id="asst-enabled" role="switch" aria-checked="true"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">On</span></button>
+            <span class="readout grow">Runs while Ferro64 is open; a time missed while the Mac slept runs when it wakes, the same day</span>
+            <button type="button" class="btn btn--ghost" id="asst-cancel">Cancel</button>
+            <button class="btn btn--primary" id="asst-save">Save job</button>
+          </div>
+        </form>
+        <div class="rows" id="asst-jobs"></div>
+        <div id="asst-report"></div>
+        <div class="section-head"><h3>Reports</h3><button class="btn btn--ghost btn--xs" id="asst-refresh">Refresh</button></div>
+        <div class="rows" id="asst-runs"></div>
+        <div class="section-head"><h3>Your decisions</h3><button class="btn btn--ghost btn--xs" id="asst-prices">Check prices now</button></div>
+        <div id="asst-decisions"></div>
+        <div class="section-head"><h3>Reports on your phone</h3><span class="readout" id="tg-state">Telegram · off</span></div>
+        <div class="well well--pad" id="tg-panel">
+          <p class="readout">Ferro64 sends each finished report (and its CSV) to your own Telegram chat. Only Ferro64 sends, only to the chat you pick here; the assistant has no way to message anyone. 1. In Telegram, message <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a>, send /newbot and copy the token it gives. 2. Paste it here and save. 3. Send your new bot "hi", then press find my chat.</p>
+          <div class="row row--wrap"><input class="field grow" id="tg-token" type="password" autocomplete="off" placeholder="Bot token, like 123456789:AA…" aria-label="Telegram bot token"><button type="button" class="btn btn--ghost btn--xs" id="tg-save">Save token</button><button type="button" class="btn btn--ghost btn--xs" id="tg-remove" hidden>Remove</button></div>
+          <div class="row row--wrap"><select class="field grow" id="tg-chat" aria-label="Telegram chat"><option value="">No chat picked</option></select><button type="button" class="btn btn--ghost btn--xs" id="tg-find">Find my chat</button><button type="button" class="btn btn--primary btn--xs" id="tg-test">Send a test</button></div>
+        </div>
+        <div class="section-head"><h3>Reports by email</h3><span class="readout" id="em-state">Email · off</span></div>
+        <form class="well well--pad" id="em-form">
+          <p class="readout">Ferro64 emails each finished report, with its sources and any CSV attached, from your own mail account. It sends only to the addresses you list here; the assistant cannot send email itself. Use an app password, not your normal password.</p>
+          <div class="stages">
+            <label class="stage"><span class="readout">Mail</span><select class="field" id="em-provider"></select></label>
+            <label class="stage"><span class="readout">Server</span><input class="field" id="em-host" placeholder="smtp.example.com" autocomplete="off"></label>
+            <label class="stage"><span class="readout">Port · security</span><span class="row"><input class="field" id="em-port" type="number" min="1" max="65535" style="width:6rem"><select class="field grow" id="em-security"><option value="starttls">STARTTLS</option><option value="tls">TLS</option><option value="none">None (relay)</option></select></span></label>
+          </div>
+          <p class="readout" id="em-help"></p>
+          <div class="stages">
+            <label class="stage"><span class="readout">Your address (sign-in)</span><input class="field" id="em-user" type="email" autocomplete="off" placeholder="you@gmail.com"></label>
+            <label class="stage"><span class="readout">App password</span><input class="field" id="em-pass" type="password" autocomplete="new-password" placeholder="abcd efgh ijkl mnop"></label>
+            <label class="stage"><span class="readout">Send to</span><input class="field" id="em-to" autocomplete="off" placeholder="you@gmail.com, team@agency.gov"></label>
+          </div>
+          <div class="row row--wrap"><span class="grow"></span><button type="button" class="btn btn--ghost btn--xs" id="em-remove" hidden>Remove</button><button class="btn btn--ghost btn--xs" id="em-save">Save</button><button type="button" class="btn btn--primary btn--xs" id="em-test">Send a test</button></div>
+        </form>
       </div>
     </section>
 
@@ -259,26 +340,26 @@
         <button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button>
         <label class="visually-hidden" for="code-project">Project</label>
         <select class="field field--slim" id="code-project"></select>
-        <button class="btn btn--ghost btn--xs" id="code-add" type="button">add project</button>
+        <button class="btn btn--ghost btn--xs" id="code-add" type="button">Add project</button>
         <span class="grow"></span>
         <div class="code__git" id="code-git" role="group" aria-label="Git">
-          <button class="btn btn--ghost btn--xs" data-git="status" type="button">status</button><button class="btn btn--ghost btn--xs" data-git="diff" type="button">diff</button><button class="btn btn--ghost btn--xs" data-git="commit" type="button">commit</button><button class="btn btn--ghost btn--xs" data-git="push" type="button">push</button>
+          <button class="btn btn--ghost btn--xs" data-git="status" type="button">Status</button><button class="btn btn--ghost btn--xs" data-git="diff" type="button">Diff</button><button class="btn btn--ghost btn--xs" data-git="commit" type="button">Commit</button><button class="btn btn--ghost btn--xs" data-git="push" type="button">Push</button>
         </div>
       </header>
       <form class="code__addform" id="code-add-form" hidden>
         <label class="visually-hidden" for="code-add-path">Project folder</label>
         <input class="field" id="code-add-path" placeholder="~/Sandbox/my-app" autocomplete="off" spellcheck="false">
-        <button class="btn btn--primary btn--xs">add</button><button class="btn btn--ghost btn--xs" type="button" id="code-add-cancel">cancel</button>
-        <span class="readout">the agent can only reach files inside this folder</span>
+        <button class="btn btn--primary btn--xs">Add</button><button class="btn btn--ghost btn--xs" type="button" id="code-add-cancel">Cancel</button>
+        <span class="readout">The agent can only reach files inside this folder</span>
       </form>
       <div class="code" id="code-body" hidden>
         <nav class="code__tree" id="code-tree" aria-label="Project files"></nav>
         <div class="code__editor">
-          <div class="code__file"><span class="readout grow" id="code-path">no file open</span><span class="readout code__dirty" id="code-dirty" hidden>unsaved</span><button class="btn btn--ghost btn--xs" id="code-save" type="button" disabled title="Save (⌘S)">save</button><button class="btn btn--ghost btn--xs" id="code-term-toggle" type="button" title="Terminal in the project folder (⌃`)" aria-expanded="false" aria-controls="code-term-panel">terminal</button></div>
+          <div class="code__file"><span class="readout grow" id="code-path">No file open</span><span class="readout code__dirty" id="code-dirty" hidden>Unsaved</span><button class="btn btn--ghost btn--xs" id="code-save" type="button" disabled title="Save (⌘S)">Save</button><button class="btn btn--ghost btn--xs" id="code-term-toggle" type="button" title="Terminal in the project folder (⌃`)" aria-expanded="false" aria-controls="code-term-panel">Terminal</button></div>
           <label class="visually-hidden" for="code-editor">File contents</label>
           <textarea class="code__text" id="code-editor" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" placeholder="Open a file from the tree." disabled></textarea>
           <div class="code__term" id="code-term-panel" hidden>
-            <div class="code__termbar"><span class="readout grow" id="code-term-title">terminal</span><button class="btn btn--ghost btn--xs" type="button" id="code-term-restart" title="End this shell and start a new one">restart</button><button class="icon-btn" type="button" id="code-term-close" aria-label="Hide the terminal" title="Hide (the shell keeps running)"><svg><use href="#i-x"/></svg></button></div>
+            <div class="code__termbar"><span class="readout grow" id="code-term-title">Terminal</span><button class="btn btn--ghost btn--xs" type="button" id="code-term-restart" title="End this shell and start a new one">Restart</button><button class="icon-btn" type="button" id="code-term-close" aria-label="Hide the terminal" title="Hide (the shell keeps running)"><svg><use href="#i-x"/></svg></button></div>
             <div class="code__termview" id="code-term"></div>
           </div>
         </div>
@@ -290,16 +371,16 @@
             <div class="row row--wrap">
               <label class="visually-hidden" for="code-model">Model</label>
               <select class="field field--slim" id="code-model"></select>
-              <button type="button" class="switch" id="code-thinking" role="switch" aria-checked="true" title="Let the model reason before each step"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">thinking</span></button>
-              <button type="button" class="switch" id="code-overnight" role="switch" aria-checked="false" title="Let this run work by itself, even with the page closed"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">overnight</span></button>
+              <button type="button" class="switch" id="code-thinking" role="switch" aria-checked="true" title="Let the model reason before each step"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">Thinking</span></button>
+              <button type="button" class="switch" id="code-overnight" role="switch" aria-checked="false" title="Let this run work by itself, even with the page closed"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">Overnight</span></button>
               <span class="grow"></span>
-              <button class="btn btn--primary btn--xs" id="code-run">run</button>
+              <button class="btn btn--primary btn--xs" id="code-run">Run</button>
             </div>
-            <div class="row row--wrap"><button class="btn btn--ghost btn--xs" type="button" id="code-new">new task</button><button class="btn btn--ghost btn--xs" type="button" id="code-history">history</button><button class="btn btn--ghost btn--xs" type="button" id="code-perms">allowed commands</button><span class="readout grow code__state" id="code-state"></span></div>
+            <div class="row row--wrap"><button class="btn btn--ghost btn--xs" type="button" id="code-new">New task</button><button class="btn btn--ghost btn--xs" type="button" id="code-history">History</button><button class="btn btn--ghost btn--xs" type="button" id="code-perms">Allowed commands</button><span class="readout grow code__state" id="code-state"></span></div>
           </form>
         </aside>
       </div>
-      <div class="page" id="code-empty"><div class="page__head"><h2>code with a local model</h2><p class="lead">Add a project folder. The agent reads it freely, but every edit and command waits for your approval, and a run can be undone. It is here to help you fix errors, write functions and do small tasks. For big tasks, use a bigger model, API keys or other tools. Read and run what it gives you.</p></div></div>
+      <div class="page" id="code-empty"><div class="page__head"><h2>Code with a local model</h2><p class="lead">Add a project folder. The agent reads it freely, but every edit and command waits for your approval, and a run can be undone. It is here to help you fix errors, write functions and do small tasks. For big tasks, use a bigger model, API keys or other tools. Read and run what it gives you.</p></div></div>
     </section>
 
     {% if api_models %}
@@ -307,11 +388,11 @@
     <section class="view view--page" id="view-api" data-title="api models" hidden>
       <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button></header>
       <div class="page">
-        <div class="page__head"><h2>api models</h2><p class="lead">Use a vendor's models with the coding agent. These are not local: while one is selected, your project's code goes to that vendor. They also get expensive, because every step resends the whole conversation and you pay per token, so a local model or a flat subscription is the better everyday choice. Keep these for when you are truly stuck. Keys are kept on this machine, in Ferro64's database, and are never shown again.</p></div>
-        <form class="well well--pad" id="hosted-limit-form"><div class="row row--wrap"><label class="label grow" for="hosted-limit">stop a coding run after this many tokens, input and output together</label><input class="field" id="hosted-limit" type="number" min="10000" step="100000"><button class="btn btn--ghost btn--xs">save</button></div></form>
-        <div class="section-head"><h3>vendors</h3></div>
+        <div class="page__head"><h2>API models</h2><p class="lead">Use a vendor's models with the coding agent. These are not local: while one is selected, your project's code goes to that vendor. They also get expensive, because every step resends the whole conversation and you pay per token, so a local model or a flat subscription is the better everyday choice. Keep these for when you are truly stuck. Keys are kept on this machine, in Ferro64's database, and are never shown again.</p></div>
+        <form class="well well--pad" id="hosted-limit-form"><div class="row row--wrap"><label class="label grow" for="hosted-limit">Stop a coding run after this many tokens, input and output together</label><input class="field" id="hosted-limit" type="number" min="10000" step="100000"><button class="btn btn--ghost btn--xs">Save</button></div></form>
+        <div class="section-head"><h3>Vendors</h3></div>
         <div class="rows" id="hosted-vendors"></div>
-        <div class="section-head"><h3>one address for all of them</h3></div>
+        <div class="section-head"><h3>One address for all of them</h3></div>
         <div class="well well--pad" id="hosted-proxy"></div>
       </div>
     </section>
@@ -321,28 +402,37 @@
     <section class="view view--page" id="view-settings" data-title="settings" hidden>
       <header class="topbar"><button class="icon-btn topbar__menu" data-open-rail aria-label="Open navigation"><svg><use href="#i-menu"/></svg></button><span class="readout">{{ engine }} · one model resident at a time</span></header>
       <div class="page">
-        <div class="page__head"><h2>settings</h2><p class="lead">Instructions every model follows, and the models on this machine.</p></div>
+        <div class="page__head"><h2>Settings</h2><p class="lead">Instructions every model follows, and the models on this machine.</p></div>
+        <div class="well well--pad">
+          <div class="row row--wrap">
+            <span class="label grow">Appearance</span>
+            <div class="segmented" id="theme-mode" role="radiogroup" aria-label="Appearance">
+              <button type="button" role="radio" aria-checked="false" data-theme-mode="light">Light</button><button type="button" role="radio" aria-checked="false" data-theme-mode="dark">Dark</button><button type="button" role="radio" aria-checked="false" data-theme-mode="system">System</button>
+            </div>
+          </div>
+          <p class="readout">System follows your computer's light or dark setting and switches with it.</p>
+        </div>
         <form class="well well--pad" id="instructions-form">
-          <label class="label" for="system-prompt">system prompt</label>
+          <label class="label" for="system-prompt">System prompt</label>
           <textarea class="field" id="system-prompt" rows="6" placeholder="For example: I live in Texas and use US units. Keep answers short unless I ask for detail."></textarea>
-          <div class="row"><span class="readout grow" id="system-prompt-note">added to every chat and every agent stage</span><button class="btn btn--primary" id="system-prompt-save">save</button></div>
+          <div class="row"><span class="readout grow" id="system-prompt-note">Added to every chat and every agent stage</span><button class="btn btn--primary" id="system-prompt-save">Save</button></div>
         </form>
         <div class="well well--pad settings__recall">
           <div class="row row--wrap">
-            <button type="button" class="switch" id="recall" role="switch" aria-checked="false"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">recall</span></button>
-            <span class="readout grow" id="recall-note">related questions from your other conversations are added to the model's context</span>
+            <button type="button" class="switch" id="recall" role="switch" aria-checked="false"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">Recall</span></button>
+            <span class="readout grow" id="recall-note">Related questions from your other conversations are added to the model's context</span>
           </div>
         </div>
-        <div class="section-head"><h3>web search</h3><span class="readout" id="search-engine"></span></div>
+        <div class="section-head"><h3>Web search</h3><span class="readout" id="search-engine"></span></div>
         <div class="well well--pad" id="search-panel"></div>
-        <div class="section-head"><h3>models</h3><span class="readout" id="storage-note">what is on disk, in memory, and what you can add</span></div>
+        <div class="section-head"><h3>Models</h3><span class="readout" id="storage-note">What is on disk, in memory, and what you can add</span></div>
         <div class="well console">
-          <div class="console__bar"><span class="console__live"><span class="dot" id="resident-dot"></span><span id="resident-state">idle</span></span><button class="btn btn--ghost btn--xs" id="unload">free memory</button></div>
+          <div class="console__bar"><span class="console__live"><span class="dot" id="resident-dot"></span><span id="resident-state">idle</span></span><button class="btn btn--ghost btn--xs" id="unload">Free memory</button></div>
           <dl class="readouts" id="readouts"></dl>
         </div>
-        <div class="section-head"><h3>on this machine <span class="readout" id="installed-count"></span></h3><button class="btn btn--ghost btn--xs" id="models-refresh">refresh</button></div>
+        <div class="section-head"><h3>On this machine <span class="readout" id="installed-count"></span></h3><button class="btn btn--ghost btn--xs" id="models-refresh">Refresh</button></div>
         <div class="rows" id="installed"></div>
-        <div class="section-head"><h3>download</h3><span class="readout">hugging face · sha-256 verified</span></div>
+        <div class="section-head"><h3>Download</h3><span class="readout">Hugging face · sha-256 verified</span></div>
         <div class="rows" id="catalog"></div>
       </div>
     </section>
@@ -352,18 +442,18 @@
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 <dialog class="dialog dialog--wide" id="code-dialog">
   <form method="dialog">
-    <h3 id="code-dialog-title">git</h3>
+    <h3 id="code-dialog-title">Git</h3>
     <label class="visually-hidden" for="code-dialog-input">Commit message</label>
-    <input class="field" id="code-dialog-input" placeholder="commit message" hidden>
+    <input class="field" id="code-dialog-input" placeholder="Commit message" hidden>
     <pre class="code__output" id="code-dialog-output"></pre>
-    <div class="row row--end"><button class="btn btn--ghost" value="cancel">close</button><button class="btn btn--primary" value="confirm" id="code-dialog-ok" hidden>commit</button></div>
+    <div class="row row--end"><button class="btn btn--ghost" value="cancel">Close</button><button class="btn btn--primary" value="confirm" id="code-dialog-ok" hidden>Commit</button></div>
   </form>
 </dialog>
 <dialog class="dialog" id="confirm">
   <form method="dialog">
-    <h3 id="confirm-title">delete this?</h3>
+    <h3 id="confirm-title">Delete this?</h3>
     <p id="confirm-text">This removes it from this machine.</p>
-    <div class="row row--end"><button class="btn btn--ghost" value="cancel">cancel</button><button class="btn btn--danger" value="confirm">delete</button></div>
+    <div class="row row--end"><button class="btn btn--ghost" value="cancel">Cancel</button><button class="btn btn--danger" value="confirm">Delete</button></div>
   </form>
 </dialog>
 </body>

@@ -15,7 +15,7 @@
 # Override the pinned engine versions with LLAMA_TAG / SD_TAG.
 set -euo pipefail
 
-LLAMA_TAG="${LLAMA_TAG:-b12032}"
+LLAMA_TAG="${LLAMA_TAG:-b12623}"
 SD_TAG="${SD_TAG:-master-1039-290148d}"
 SD_COMMIT="${SD_TAG##*-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -120,7 +120,13 @@ case "$OS" in
       if [ "$kind" = cpu ]; then sd="x86_64"; else sd="x86_64-vulkan"; fi
     else
       case "$kind" in
-        cuda) llama="ubuntu-cuda-13.4-arm64" ;;
+        cuda)
+          if [ "$LLAMA_TAG" = b12032 ]; then
+            llama="ubuntu-cuda-13.4-arm64"
+          else
+            llama="ubuntu-cuda-13.5-arm64"
+          fi
+          ;;
         vulkan) llama="ubuntu-vulkan-arm64" ;;
         *) llama="ubuntu-arm64" ;;
       esac

@@ -75,7 +75,7 @@ function showVideo(item) {
   const canvas = $('video-canvas');
   canvas.classList.remove('blueprint');
   const seconds = (item.frames - 1) / 24;
-  canvas.innerHTML = `<div class="canvas__result"><video src="${esc(url)}" controls autoplay loop playsinline></video><div class="row row--wrap"><span class="readout grow">${item.width}×${item.height} · ${seconds.toFixed(0)} s${item.audio ? ' · sound' : ''} · made in ${esc(duration(item.duration_ms))}</span><button type="button" class="btn btn--ghost btn--xs" id="video-continue" title="Start the next shot from this video's last frame">continue from last frame</button><a class="btn btn--ghost btn--xs" href="${esc(url)}" download="ferro64-${esc(item.id)}.mp4">save</a></div>${item.enhanced_prompt ? `<details class="video__refined"><summary class="readout">refined prompt</summary><p>${esc(item.enhanced_prompt)}</p><button type="button" class="btn btn--ghost btn--xs" id="video-use-refined">use this prompt</button></details>` : ''}</div>`;
+  canvas.innerHTML = `<div class="canvas__result"><video src="${esc(url)}" controls autoplay loop playsinline></video><div class="row row--wrap"><span class="readout grow">${item.width}×${item.height} · ${seconds.toFixed(0)} s${item.audio ? ' · sound' : ''} · made in ${esc(duration(item.duration_ms))}</span><button type="button" class="btn btn--ghost btn--xs" id="video-continue" title="Start the next shot from this video's last frame">Continue from last frame</button><a class="btn btn--ghost btn--xs" href="${esc(url)}" download="ferro64-${esc(item.id)}.mp4">Save</a></div>${item.enhanced_prompt ? `<details class="video__refined"><summary class="readout">Refined prompt</summary><p>${esc(item.enhanced_prompt)}</p><button type="button" class="btn btn--ghost btn--xs" id="video-use-refined">Use this prompt</button></details>` : ''}</div>`;
   $('video-continue').onclick = () => continueFrom(item);
   if (item.enhanced_prompt) $('video-use-refined').onclick = () => { $('video-prompt').value = item.enhanced_prompt; $('video-prompt').focus(); };
 }
@@ -126,7 +126,7 @@ function followJob(id) {
       toast(`Video ready in ${duration(job.duration_ms)}`);
     } else if (job.status === 'failed') {
       clearInterval(vid.timer); setVideoBusy(false);
-      $('video-canvas').innerHTML = `<div class="video__progress"><span class="label">the video failed</span><pre class="code__output">${esc(job.error || 'unknown error')}</pre></div>`;
+      $('video-canvas').innerHTML = `<div class="video__progress"><span class="label">The video failed</span><pre class="code__output">${esc(job.error || 'unknown error')}</pre></div>`;
     } else {
       videoProgress(job);
     }

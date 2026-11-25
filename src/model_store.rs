@@ -72,17 +72,18 @@ impl CatalogEntry {
     }
 }
 
-/// Memory while running: an image model also loads Qwen3 4B to read the
-/// prompt, and the image decoder.
+/// Memory while running: an image model also loads its prompt readers and
+/// works on the image itself.
 pub fn memory_needed(entry: &CatalogEntry) -> f64 {
-    let extra = if entry.is_image() { 2_497_280_256 + 400_000_000 } else { 0 };
+    let readers: u64 = prompt_readers(entry.id).iter().filter_map(|id| catalog_entry(id)).map(|e| e.total_bytes()).sum();
+    let extra = if entry.is_image() { readers + 400_000_000 } else { 0 };
     crate::hardware::needed_gb(entry.total_bytes() + extra)
 }
 
 /// Dense models read every weight for every word, so they run far slower
 /// than their size suggests: 11–15 tok/s on an M1 Max, against about 50 for
 /// the A3B models.
-const DENSE_MODELS: &[&str] = &["qwen3.8:27b", "gemma4:31b"];
+const DENSE_MODELS: &[&str] = &["gemma4:31b"];
 
 /// The best model per job that fits this machine well, by preference.
 pub fn recommended(hw: &crate::hardware::Hardware) -> Value {
@@ -93,10 +94,10 @@ pub fn recommended(hw: &crate::hardware::Hardware) -> Value {
         ids.iter().find(|id| fits(id, Fit::Good)).or_else(|| ids.iter().rev().find(|id| fits(id, Fit::Tight))).copied()
     };
     json!({
-        // One default on every machine, for quality on an ordinary 16 GB laptop.
-        // Bigger models stay in the list for anyone who wants them.
+        // The 9B model fits an ordinary 16 GB laptop. Offer the coding
+        // specialists as the recommendation when the hardware fits them.
         "chat": pick(&["qwen3.5:9b"]),
-        "code": pick(&["qwen3.5:9b"]),
+        "code": pick(&["inkling-2-mini:26b", "devstral-small-2:24b", "qwen3.5:9b"]),
         "agents": pick(&["qwen3.5:9b"]),
         "reviewer": pick(&["qwen3.5:9b"]),
         "images": pick(&["image:z-image-turbo", "image:flux2-klein-4b"]),
@@ -121,26 +122,6 @@ pub const CATALOG: &[CatalogEntry] = &[
             bytes: 2_497_280_256,
         },
         projector: None,
-        listed: false,
-        folder: "",
-        extra_name: None,
-    },
-    CatalogEntry {
-        id: "qwen3.5:35b-a3b",
-        name: "Qwen3.5 35B-A3B",
-        role: "The best fit for a 64 GB Mac: 35B of knowledge at about 3B speed, thinking on demand, reads images",
-        kind: "vision",
-        repo: "unsloth/Qwen3.5-35B-A3B-GGUF",
-        model: FileSpec {
-            remote: "Qwen3.5-35B-A3B-Q4_K_M.gguf",
-            sha256: "3b46d1066bc91cc2d613e3bc22ce691dd77e6f0d33c9060690d24ce6de494375",
-            bytes: 22_016_023_168,
-        },
-        projector: Some(FileSpec {
-            remote: "mmproj-F16.gguf",
-            sha256: "a516ab92e8240da4734d68352bdfba84c16e830ee40010b8fac80d69c77272ff",
-            bytes: 899_283_648,
-        }),
         listed: false,
         folder: "",
         extra_name: None,
@@ -186,15 +167,31 @@ pub const CATALOG: &[CatalogEntry] = &[
         extra_name: None,
     },
     CatalogEntry {
-        id: "granite4.1:8b",
-        name: "Granite 4.1 8B",
-        role: "IBM's small model. Weak at coding in our tests, so not recommended for now",
-        kind: "general",
-        repo: "ibm-granite/granite-4.1-8b-GGUF",
+        id: "inkling-2-mini:26b",
+        name: "Inkling 2 Mini",
+        role: "Our strongest local coding pick across Python, Swift, Erlang, C# and Haskell. Requires llama.cpp b12623 or newer",
+        kind: "coding",
+        repo: "ggml-org/Inkling-2-Mini-GGUF",
         model: FileSpec {
-            remote: "granite-4.1-8b-Q4_K_M.gguf",
-            sha256: "ed902ac9eb6adce5a90c6a08c8ea201b50e23fdc5976d1cd0362006afac5309e",
-            bytes: 5_347_914_400,
+            remote: "https://huggingface.co/ggml-org/Inkling-2-Mini-GGUF/resolve/e8a2cecf0e78914f07cc27b9be711a9b2c7561d9/Inkling-2-Mini-IQ4_NL.gguf",
+            sha256: "cbdf3fa9dc50a4124977980f37da4f1fa764b0cfe800d275cd43d26ce2a81af4",
+            bytes: 17_627_940_768,
+        },
+        projector: None,
+        listed: false,
+        folder: "",
+        extra_name: None,
+    },
+    CatalogEntry {
+        id: "devstral-small-2:24b",
+        name: "Devstral Small 2 24B",
+        role: "Faster on our small coding tasks, especially Swift and Haskell. Check its C# edits carefully",
+        kind: "coding",
+        repo: "unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF",
+        model: FileSpec {
+            remote: "https://huggingface.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF/resolve/6e458b8add42681bfd023de5eab93637694aaf82/Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf",
+            sha256: "d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
+            bytes: 14_334_446_752,
         },
         projector: None,
         listed: false,
@@ -216,26 +213,6 @@ pub const CATALOG: &[CatalogEntry] = &[
             remote: "mmproj-F16.gguf",
             sha256: "8971ee4f331ff0a4c609374f32984b3d4e6dc086c0aa35f1d637fad1829e887f",
             bytes: 899_283_680,
-        }),
-        listed: false,
-        folder: "",
-        extra_name: None,
-    },
-    CatalogEntry {
-        id: "qwen3.8:27b",
-        name: "Qwen3.8 27B",
-        role: "Newest Qwen, dense 27B: stronger reasoning and code, reads images; slower than the A3B models",
-        kind: "vision",
-        repo: "unsloth/Qwen3.8-27B-GGUF",
-        model: FileSpec {
-            remote: "Qwen3.8-27B-UD-Q4_K_M.gguf",
-            sha256: "322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
-            bytes: 16_464_440_224,
-        },
-        projector: Some(FileSpec {
-            remote: "mmproj-F16.gguf",
-            sha256: "cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e",
-            bytes: 927_607_488,
         }),
         listed: false,
         folder: "",
@@ -271,22 +248,6 @@ pub const CATALOG: &[CatalogEntry] = &[
             remote: "Qwen3-Embedding-0.6B-Q8_0.gguf",
             sha256: "06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439",
             bytes: 639_150_592,
-        },
-        projector: None,
-        listed: false,
-        folder: "",
-        extra_name: None,
-    },
-    CatalogEntry {
-        id: "glm-4.7-flash",
-        name: "GLM-4.7 Flash",
-        role: "Excellent writing and code; a great everyday chat model",
-        kind: "general",
-        repo: "unsloth/GLM-4.7-Flash-GGUF",
-        model: FileSpec {
-            remote: "GLM-4.7-Flash-Q4_K_M.gguf",
-            sha256: "29837ed2c0fc5f51981adf8ac8083fcf80743c598381f13e9f06cbad0498b174",
-            bytes: 18_312_339_808,
         },
         projector: None,
         listed: false,
@@ -351,7 +312,128 @@ pub const CATALOG: &[CatalogEntry] = &[
         folder: "image",
         extra_name: Some("ae.safetensors"),
     },
+    // Image models with no Qwen inside: their prompts are read by Google's
+    // T5 and OpenAI's CLIP, for teams that cannot use Chinese-made models.
+    CatalogEntry {
+        id: "image:flux1-schnell",
+        name: "FLUX.1 schnell",
+        role: "Image generation in 4 steps from Black Forest Labs (Germany), Apache-2.0. Reads prompts with T5-XXL and CLIP-L, no Qwen",
+        kind: "image",
+        repo: "leejet/FLUX.1-schnell-gguf",
+        model: FileSpec {
+            remote: "flux1-schnell-q8_0.gguf",
+            sha256: "098c424cfa97526d9227da984563ad1509298f7573458ed210cd5ba0220ab635",
+            bytes: 12_801_721_248,
+        },
+        // The same FLUX.1 decoder Z-Image uses; shared on disk.
+        projector: Some(FileSpec {
+            remote: "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors",
+            sha256: "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38",
+            bytes: 335_304_388,
+        }),
+        listed: false,
+        folder: "image",
+        extra_name: Some("ae.safetensors"),
+    },
+    CatalogEntry {
+        id: "image:sd3.5-large-turbo",
+        name: "SD 3.5 Large Turbo",
+        role: "Image generation in 4 steps from Stability AI (UK); its own license is free under $1M revenue. Reads prompts with T5-XXL, CLIP-L and CLIP-G, no Qwen",
+        kind: "image",
+        repo: "stduhpf/SD3.5-Large-Turbo-GGUF-mixed-sdcpp",
+        // Includes its image decoder.
+        model: FileSpec {
+            remote: "legacy/sd3.5_large_turbo-q8_0.gguf",
+            sha256: "c4d96c365b2c6952f4fd303d6242e2be1de6e68a37a4275d550aec0cc8e87f2f",
+            bytes: 9_114_470_368,
+        },
+        projector: None,
+        listed: false,
+        folder: "image",
+        extra_name: None,
+    },
+    CatalogEntry {
+        id: "image:sdxl",
+        name: "SDXL 1.0",
+        role: "Older, lighter image model from Stability AI (UK), CreativeML OpenRAIL++. Reads prompts with its own CLIP, no extra downloads; best with keyword-style prompts",
+        kind: "image",
+        repo: "stabilityai/stable-diffusion-xl-base-1.0",
+        model: FileSpec {
+            remote: "sd_xl_base_1.0.safetensors",
+            sha256: "31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b",
+            bytes: 6_938_078_334,
+        },
+        // A decoder fixed to run at half precision, as Metal does.
+        projector: Some(FileSpec {
+            remote: "https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl_vae.safetensors",
+            sha256: "235745af8d86bf4a4c1b5b4f529868b37019a10f7c0b2e79ad0abca3a22bc6e1",
+            bytes: 334_641_162,
+        }),
+        listed: false,
+        folder: "image",
+        extra_name: Some("sdxl_vae.safetensors"),
+    },
+    // Prompt readers for the models above.
+    CatalogEntry {
+        id: "image:clip-l",
+        name: "CLIP-L",
+        role: "A part of image generation: FLUX.1 schnell and SD 3.5 read prompts with it (OpenAI, MIT)",
+        kind: "encoder",
+        repo: "comfyanonymous/flux_text_encoders",
+        model: FileSpec {
+            remote: "clip_l.safetensors",
+            sha256: "660c6f5b1abae9dc498ac2d21e1347d2abdb0cf6c0c0c8576cd796491d9a6cdd",
+            bytes: 246_144_152,
+        },
+        projector: None,
+        listed: false,
+        folder: "image",
+        extra_name: None,
+    },
+    CatalogEntry {
+        id: "image:clip-g",
+        name: "CLIP-G",
+        role: "A part of image generation: SD 3.5 reads prompts with it (OpenCLIP ViT-bigG, LAION)",
+        kind: "encoder",
+        repo: "Comfy-Org/stable-diffusion-3.5",
+        model: FileSpec {
+            remote: "text_encoders/clip_g.safetensors",
+            sha256: "ec310df2af79c318e24d20511b601a591ca8cd4f1fce1d8dff822a356bcdb1f4",
+            bytes: 1_389_382_176,
+        },
+        projector: None,
+        listed: false,
+        folder: "image",
+        extra_name: None,
+    },
+    CatalogEntry {
+        id: "image:t5xxl",
+        name: "T5-XXL",
+        role: "A part of image generation: FLUX.1 schnell and SD 3.5 read prompts with it (Google, Apache-2.0)",
+        kind: "encoder",
+        repo: "city96/t5-v1_1-xxl-encoder-gguf",
+        model: FileSpec {
+            remote: "t5-v1_1-xxl-encoder-Q8_0.gguf",
+            sha256: "9ec60f6028534b7fe5af439fcb535d75a68592a9ca3fcdeb175ef89e3ee99825",
+            bytes: 5_061_584_064,
+        },
+        projector: None,
+        listed: false,
+        folder: "image",
+        extra_name: None,
+    },
 ];
+
+/// The prompt readers (text encoders) an image model loads beside its own
+/// weights. Downloading the model downloads these too.
+pub fn prompt_readers(id: &str) -> &'static [&'static str] {
+    match id {
+        "image:z-image-turbo" | "image:flux2-klein-4b" => &["qwen3:4b"],
+        "image:flux1-schnell" => &["image:clip-l", "image:t5xxl"],
+        "image:sd3.5-large-turbo" => &["image:clip-l", "image:clip-g", "image:t5xxl"],
+        _ => &[],
+    }
+}
 
 pub fn catalog_entry(id: &str) -> Option<&'static CatalogEntry> {
     CATALOG.iter().find(|entry| entry.id == id)
@@ -745,6 +827,19 @@ mod tests {
     }
 
     #[test]
+    fn coding_recommendations_follow_available_memory() {
+        let mac = |ram_gb, gpu_gb| crate::hardware::Hardware {
+            kind: "mac".into(),
+            ram_gb,
+            gpu_gb,
+            gpu_name: None,
+        };
+        assert_eq!(recommended(&mac(16.0, 10.67))["code"], "qwen3.5:9b");
+        assert_eq!(recommended(&mac(24.0, 16.0))["code"], "devstral-small-2:24b");
+        assert_eq!(recommended(&mac(32.0, 24.0))["code"], "inkling-2-mini:26b");
+    }
+
+    #[test]
     fn catalog_paths_hashes_and_ids_are_fixed_and_cover_the_inventory() {
         let mut ids = std::collections::HashSet::new();
         for entry in CATALOG {
@@ -756,19 +851,28 @@ mod tests {
                 assert!(file.sha256.bytes().all(|byte| byte.is_ascii_hexdigit()));
                 assert!(file.bytes > 0 && file.bytes <= MAX_DOWNLOAD_BYTES);
             }
-            if !entry.is_image() {
+            if !entry.is_image() && entry.kind != "encoder" {
                 assert_eq!(catalog_id_for_file(entry.local_model()), Some(entry.id));
             }
         }
-        // The curated set: fast default, strong model, reviewer, vision,
-        // Z-Image and its text encoder.
-        for id in ["qwen3.5:35b-a3b", "glm-4.7-flash", "nemotron-3-nano:30b-a3b", "qwen3:4b", "image:z-image-turbo"] {
+        // The curated set: fast default, strong model, reviewer, coders,
+        // vision, images and their prompt readers.
+        for id in ["qwen3.5:9b", "qwen3.6:35b-a3b", "nemotron-3-nano:30b-a3b", "inkling-2-mini:26b", "devstral-small-2:24b", "qwen3:4b", "image:z-image-turbo", "image:flux1-schnell", "image:t5xxl"] {
             assert!(catalog_entry(id).is_some(), "{id} missing from catalog");
         }
-        let vision = catalog_entry("qwen3.5:35b-a3b").unwrap();
+        for id in ["qwen3.5:35b-a3b", "qwen3.8:27b", "glm-4.7-flash", "granite4.1:8b"] {
+            assert!(catalog_entry(id).is_none(), "{id} was trimmed");
+        }
+        // Every model's prompt readers are in the catalog.
+        for entry in CATALOG.iter().filter(|e| e.is_image()) {
+            for reader in prompt_readers(entry.id) {
+                assert!(catalog_entry(reader).is_some(), "{} needs {reader}", entry.id);
+            }
+        }
+        let vision = catalog_entry("qwen3.6:35b-a3b").unwrap();
         assert_eq!(
             vision.local_projector().as_deref(),
-            Some("Qwen3.5-35B-A3B-Q4_K_M.mmproj.gguf")
+            Some("Qwen3.6-35B-A3B-UD-Q4_K_M.mmproj.gguf")
         );
     }
 

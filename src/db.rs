@@ -1015,6 +1015,12 @@ impl Database {
         Ok(conn.execute("DELETE FROM code_permissions WHERE project_id = ?1 AND prefix = ?2", params![project_id, prefix])? > 0)
     }
 
+    /// Direct access for modules that keep their own tables (assistant.rs).
+    pub fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+        let conn = self.conn.lock().unwrap();
+        f(&conn)
+    }
+
     // --- Settings ---
 
     pub fn setting(&self, key: &str) -> Result<Option<String>> {

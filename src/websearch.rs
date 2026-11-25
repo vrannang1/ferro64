@@ -349,7 +349,22 @@ fn duckduckgo_target(href: &str) -> Option<String> {
     Some(url.to_string())
 }
 
+/// Reads one public page for the assistant, which asks for pages by address.
+/// The same rules as search apply: public http(s) only, HTML only.
+pub async fn fetch_page(client: &Client, url: &str, max_chars: usize) -> Result<String, String> {
+    let parsed = Url::parse(url).map_err(|_| format!("'{url}' is not a web address"))?;
+    if !is_public(&parsed) {
+        return Err("Only public http(s) pages can be read".into());
+    }
+    let html = read_html(client, parsed.as_str()).await?;
+    Ok(page_text_max(&html, max_chars))
+}
+
 async fn read_page(client: &Client, url: &str) -> Result<String, String> {
+    Ok(page_text(&read_html(client, url).await?))
+}
+
+async fn read_html(client: &Client, url: &str) -> Result<String, String> {
     let mut response = client.get(url).send().await.map_err(|e| e.to_string())?;
     if !response.status().is_success() {
         return Err(response.status().to_string());
@@ -369,12 +384,16 @@ async fn read_page(client: &Client, url: &str) -> Result<String, String> {
             break;
         }
     }
-    Ok(page_text(&String::from_utf8_lossy(&bytes)))
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// Readable text of a page: headings, paragraphs, list items, table cells and
 /// code from its main content, falling back to the whole body.
 fn page_text(html: &str) -> String {
+    page_text_max(html, PAGE_CHARS)
+}
+
+fn page_text_max(html: &str, max_chars: usize) -> String {
     let doc = Html::parse_document(html);
     let blocks = Selector::parse("h1, h2, h3, h4, p, li, td, th, pre, blockquote, dt, dd").unwrap();
     let skip = ["nav", "header", "footer", "aside", "form", "script", "style", "noscript"];
@@ -399,12 +418,12 @@ fn page_text(html: &str) -> String {
             }
             out.push_str(&text);
             out.push('\n');
-            if out.len() >= PAGE_CHARS {
+            if out.len() >= max_chars {
                 break;
             }
         }
         if out.len() > 200 || root.value().name() == "body" {
-            return truncate(&out, PAGE_CHARS);
+            return truncate(&out, max_chars);
         }
     }
     String::new()

@@ -512,14 +512,12 @@ impl LlamaCpp {
         {
             return Err(format!("Vision model '{model_id}' requires a compatible mmproj file in the llama.cpp registry"));
         }
-        let mode = gguf::read_cached(&model.path).map_or(Thinking::None, |info| info.thinking());
-        let reasons = options.thinking || matches!(mode, Thinking::Always | Thinking::Effort);
+        let info = gguf::read_cached(&model.path);
         let start = Instant::now();
         let result = async {
             let (base, alias, load_ms) = self.ensure_running(client, &model, &mut emitter).await?;
-            let mut outcome = self
-                .stream(client, &base, &alias, messages, options, reasons, &mut emitter)
-                .await?;
+            let body = chat_payload(&alias, messages, options, info.as_ref());
+            let mut outcome = self.stream(client, &base, &body, &mut emitter).await?;
             outcome.stats.load_ms = load_ms;
             outcome.duration_ms = start.elapsed().as_millis() as u64;
             Ok(outcome)
@@ -551,15 +549,14 @@ impl LlamaCpp {
     ) -> Result<ToolTurn, String> {
         self.available()?;
         let model = self.find(model_id)?;
-        let mode = gguf::read_cached(&model.path).map_or(Thinking::None, |info| info.thinking());
-        if !gguf::read_cached(&model.path).and_then(|info| info.chat_template).is_some_and(|t| t.contains("tool")) {
+        let info = gguf::read_cached(&model.path);
+        if !info.as_ref().and_then(|info| info.chat_template.as_deref()).is_some_and(|t| t.contains("tool")) {
             return Err(format!("'{model_id}' has no tool-calling chat template; choose Qwen3.6 or another tool-capable model"));
         }
-        let reasons = options.thinking || matches!(mode, Thinking::Always | Thinking::Effort);
         let start = Instant::now();
         let result = async {
             let (base, alias, load_ms) = self.ensure_running(client, &model, emitter).await?;
-            let mut body = chat_payload(&alias, &[], options, reasons);
+            let mut body = chat_payload(&alias, &[], options, info.as_ref());
             body["messages"] = serde_json::Value::from(messages.to_vec());
             body["tools"] = tools.clone();
             let mut turn = self.stream_tools(client, &base, &body, emitter).await?;
@@ -633,15 +630,12 @@ impl LlamaCpp {
         &self,
         client: &Client,
         base: &str,
-        alias: &str,
-        messages: &[ChatMessagePayload],
-        options: ChatOptions,
-        reasons: bool,
+        body: &serde_json::Value,
         emitter: &mut Emitter,
     ) -> Result<ChatOutcome, String> {
         let mut response = client
             .post(format!("{base}/v1/chat/completions"))
-            .json(&chat_payload(alias, messages, options, reasons))
+            .json(body)
             .send()
             .await
             .map_err(|error| format!("llama-server inference failed: {error}"))?;
@@ -1027,13 +1021,11 @@ fn discover_ollama(cache: &Path) -> Vec<LocalModel> {
     models
 }
 
-/// `reasons` is true when the model will reason: thinking was asked for, or
-/// its template always reasons (gpt-oss, DeepSeek R1).
 fn chat_payload(
     alias: &str,
     messages: &[ChatMessagePayload],
     options: ChatOptions,
-    reasons: bool,
+    info: Option<&gguf::GgufInfo>,
 ) -> serde_json::Value {
     let messages: Vec<_> = messages
         .iter()
@@ -1060,12 +1052,20 @@ fn chat_payload(
             }
         })
         .collect();
-    // Templates ignore kwargs they do not use: Qwen3/Nemotron read
-    // enable_thinking, gpt-oss style templates read reasoning_effort.
+    let mode = info.map_or(Thinking::None, gguf::GgufInfo::thinking);
+    let inkling = info.and_then(|info| info.architecture.as_deref()) == Some("inkling2_loop");
+    let can_disable_effort = inkling || info.is_some_and(|info| {
+        info.architecture.as_deref() == Some("cohere2moe")
+            && info.chat_template.as_deref().is_some_and(|template| {
+                template.contains("reasoning_effort | lower == \"none\"")
+            })
+    });
+    let reasons = options.thinking || (!can_disable_effort && matches!(mode, Thinking::Always | Thinking::Effort));
     let mut kwargs = serde_json::json!({"enable_thinking": options.thinking});
-    // Medium is every template's default, and some templates accept only
-    // "low" and "high", so medium leaves the template to pick.
-    if options.effort != Effort::Medium {
+    // These templates honor the explicit off level instead of enable_thinking.
+    if can_disable_effort && !options.thinking {
+        kwargs["reasoning_effort"] = serde_json::Value::from("none");
+    } else if inkling || options.effort != Effort::Medium {
         kwargs["reasoning_effort"] = serde_json::Value::from(options.effort.as_str());
     }
     serde_json::json!({
@@ -1131,7 +1131,7 @@ mod tests {
                 effort: Effort::Low,
                 temperature: Temperature::Precise,
             },
-            false,
+            None,
         );
         assert_eq!(
             payload["messages"][0]["content"][0]["text"],
@@ -1150,9 +1150,33 @@ mod tests {
         assert_eq!(payload["chat_template_kwargs"]["enable_thinking"], false);
         assert_eq!(payload["chat_template_kwargs"]["reasoning_effort"], "low");
         assert_eq!(payload["temperature"], 0.2_f32);
-        let medium = chat_payload("a", &[], ChatOptions { thinking: true, effort: Effort::Medium, ..Default::default() }, true);
+        let medium = chat_payload("a", &[], ChatOptions { thinking: true, effort: Effort::Medium, ..Default::default() }, None);
         assert_eq!(medium["max_tokens"], 12_288);
         assert!(medium["chat_template_kwargs"].get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn supported_templates_turn_off_reasoning_with_effort_none() {
+        let info = gguf::GgufInfo {
+            architecture: Some("inkling2_loop".into()),
+            chat_template: Some("{{ reasoning_effort }}".into()),
+            ..Default::default()
+        };
+        let off = chat_payload("inkling", &[], ChatOptions::default(), Some(&info));
+        assert_eq!(off["chat_template_kwargs"]["reasoning_effort"], "none");
+        assert_eq!(off["max_tokens"], 4096);
+        let on = chat_payload("inkling", &[], ChatOptions { thinking: true, ..Default::default() }, Some(&info));
+        assert_eq!(on["chat_template_kwargs"]["reasoning_effort"], "medium");
+        assert_eq!(on["max_tokens"], 12_288);
+
+        let cohere = gguf::GgufInfo {
+            architecture: Some("cohere2moe".into()),
+            chat_template: Some("{{ false if reasoning_effort | lower == \"none\" else true }}".into()),
+            ..Default::default()
+        };
+        let off = chat_payload("north", &[], ChatOptions::default(), Some(&cohere));
+        assert_eq!(off["chat_template_kwargs"]["reasoning_effort"], "none");
+        assert_eq!(off["max_tokens"], 4096);
     }
 
     #[test]
@@ -1380,7 +1404,7 @@ HTTPServer(('127.0.0.1', port), Handler).serve_forever()
         for name in [
             "qwen2.5-3b-instruct-q4_k_m.gguf",
             "qwen2.5-coder-3b-q4_k_m.gguf",
-            "GLM-4.7-Flash-Q4_K_M.gguf",
+            "Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf",
             "photo.gguf",
             "photo.mmproj.gguf",
             "other-projector.gguf",
@@ -1394,7 +1418,7 @@ HTTPServer(('127.0.0.1', port), Handler).serve_forever()
         assert_eq!(models.len(), 4);
         assert!(models.iter().any(|model| model.id == "qwen2.5:3b"));
         assert!(models.iter().any(|model| model.id == "qwen2.5-coder:3b"));
-        assert!(models.iter().any(|model| model.id == "glm-4.7-flash"));
+        assert!(models.iter().any(|model| model.id == "devstral-small-2:24b"));
         assert_eq!(
             models
                 .iter()

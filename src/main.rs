@@ -1,4 +1,5 @@
 mod agent;
+mod assistant;
 mod brief;
 mod code_api;
 mod code_index;
@@ -355,6 +356,9 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         Ok(count) => tracing::info!("{count} coding runs were interrupted by the last shutdown"),
         Err(error) => tracing::warn!("Could not close interrupted runs: {error}"),
     }
+    assistant::init(&db)?;
+    let assistant = web::Data::new(assistant::Assistant::new(llm.clone(), db.clone(), websearch::client(), data_dir.clone()));
+    assistant.spawn_scheduler();
     let coder = web::Data::new(coder::Coder {
         llm: llm.clone(),
         db: db.clone(),
@@ -363,7 +367,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     });
     let state = web::Data::new(AppState {
         videos: Default::default(),
-        agent: Arc::new(AgentHarness::new(llm.clone(), db.clone())),
+        agent: Arc::new(AgentHarness::new(llm.clone(), db.clone(), static_dir.clone())),
         db,
         llm,
         model_store,
@@ -397,6 +401,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         App::new()
             .app_data(state.clone())
             .app_data(coder.clone())
+            .app_data(assistant.clone())
             .app_data(json_config())
             .wrap(middleware::Logger::new("%r %s %Dms").exclude("/api/status"))
             .wrap(
@@ -407,6 +412,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
             .configure(routes)
             .configure(code_api::routes)
             .configure(hosted::routes)
+            .configure(assistant::routes)
             .service(Files::new("/static", &static_dir))
             .default_service(web::to(|| async {
                 HttpResponse::NotFound().json(json!({"error":"Route not found"}))
@@ -528,6 +534,14 @@ async fn download_model_handler(
         .start_download(&payload.model)
         .await
         .map_err(invalid)?;
+    // An image model cannot run without its prompt readers (Qwen3 4B for
+    // Z-Image and FLUX.2, T5 and CLIP for FLUX.1 and SD 3.5), so they come
+    // with it, after it in the same queue.
+    for reader in model_store::prompt_readers(&payload.model) {
+        if let Err(error) = state.model_store.start_download(reader).await {
+            tracing::warn!("Could not queue {reader} for {}: {error}", payload.model);
+        }
+    }
     Ok(HttpResponse::Accepted()
         .json(json!({"status":if started {"started"} else {"available"},"model":payload.model})))
 }
@@ -1388,7 +1402,7 @@ async fn enhance_handler(
     if prompt.is_empty() || prompt.chars().count() > 4_000 {
         return Err(invalid("Write a prompt of up to 4,000 characters first"));
     }
-    let modern = matches!(payload.model.as_deref(), Some("flux2-klein" | "z-image-turbo"));
+    let modern = matches!(payload.model.as_deref(), Some("flux2-klein" | "z-image-turbo" | "flux1-schnell" | "sd35-turbo"));
     if !modern {
         return Ok(web::Json(
             json!({"original": prompt, "enhanced": enhancer::enhance_prompt(prompt), "by": "rules"}),
@@ -1402,7 +1416,7 @@ async fn enhance_handler(
         .iter()
         .filter(chat)
         .find(|m| m.is_resident)
-        .or_else(|| ["qwen3.5:9b", "glm-4.7-flash"].iter().find_map(|id| models.iter().filter(chat).find(|m| m.id == *id)))
+        .or_else(|| ["qwen3.5:9b", "gemma4:e4b"].iter().find_map(|id| models.iter().filter(chat).find(|m| m.id == *id)))
         .or_else(|| models.iter().find(chat))
         .ok_or_else(|| invalid("Refining needs a chat model; download one in Models"))?
         .id
@@ -1452,7 +1466,7 @@ async fn status_handler(
         "ocr_available":ocr::binary_path(&state.static_dir).is_file(),
         "database":{"type":"SQLite3 WAL", "conversations":conversations, "messages":messages, "images":images, "agent_tasks":agent_tasks},
         "engine":state.llm.engine_label(), "image_backend":generator::backend_name(),
-        "image_models": sdcpp::ImageModel::ALL.map(|m| json!({"id": m.id(), "name": m.label(), "ready": sdcpp::ready(m), "catalog_id": m.catalog_id()}))
+        "image_models": sdcpp::ImageModel::ALL.map(|m| json!({"id": m.id(), "name": m.label(), "ready": sdcpp::ready(m), "missing": sdcpp::missing(m), "catalog_id": m.catalog_id()}))
     })))
 }
 
@@ -1714,7 +1728,7 @@ mod tests {
         let db = Database::new(root.join("test.db")).unwrap();
         let llm = Arc::new(LlmEngine::new());
         web::Data::new(AppState {
-            agent: Arc::new(AgentHarness::new(llm.clone(), db.clone())),
+            agent: Arc::new(AgentHarness::new(llm.clone(), db.clone(), root.join("static"))),
             model_store: model_store::ModelStore::new(root),
             db,
             llm,

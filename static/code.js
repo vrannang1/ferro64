@@ -37,7 +37,7 @@ function renderCodeProjects() {
   const select = $('code-project');
   select.innerHTML = code.projects.length
     ? code.projects.map((p) => `<option value="${esc(p.id)}"${p.id === code.project ? ' selected' : ''}>${esc(p.name)}</option>`).join('') + '<option value="" disabled>──</option><option value="__remove">remove this project…</option>'
-    : '<option value="">no projects yet</option>';
+    : '<option value="">No projects yet</option>';
   select.disabled = !code.projects.length;
   const has = Boolean(code.project);
   $('code-body').hidden = !has;
@@ -50,7 +50,7 @@ function renderCodeProjects() {
 
 function renderCodeModels() {
   const models = [...chatModels(), ...(typeof hostedModels === 'function' ? hostedModels() : [])];
-  const preferred = ['qwen3.6:35b-a3b', 'qwen3.5:35b-a3b', 'glm-4.7-flash', 'qwen3.5:9b'];
+  const preferred = ['qwen3.6:35b-a3b', 'inkling-2-mini:26b', 'devstral-small-2:24b', 'qwen3.5:9b'];
   // In order of preference, not the list's alphabetical order.
   if (!models.some((m) => m.id === code.model)) code.model = (preferred.map((id) => models.find((m) => m.id === id)).find(Boolean) || models[0])?.id || '';
   models.sort((a, b) => (preferred.indexOf(b.id) >= 0) - (preferred.indexOf(a.id) >= 0) || (a.name || a.id).localeCompare(b.name || b.id));
@@ -140,7 +140,7 @@ function renderTree() {
     }
   };
   walk('.', 0);
-  $('code-tree').innerHTML = rows.join('') || '<p class="readout" style="padding: 0 12px">empty folder</p>';
+  $('code-tree').innerHTML = rows.join('') || '<p class="readout" style="padding: 0 12px">Empty folder</p>';
   for (const node of $('code-tree').querySelectorAll('.code__node')) {
     node.onclick = () => node.dataset.dir === 'true' ? toggleDir(node.dataset.path) : openFile(node.dataset.path);
   }
@@ -236,7 +236,7 @@ function closeFile() {
   code.file = null;
   $('code-editor').value = '';
   $('code-editor').disabled = true;
-  $('code-path').textContent = 'no file open';
+  $('code-path').textContent = 'No file open';
   renderTabs(); renderTree();
 }
 
@@ -391,7 +391,7 @@ function approvalCard(data) {
     : `<div class="row"><b>run a command</b>${data.risky ? '<span class="tag">can delete, change the system or use the network</span>' : ''}</div><pre class="code__cmd">${esc(data.command)}</pre>`;
   const card = logAppend(`<div class="code__ask${data.risky ? ' is-risky' : ''}" data-call="${esc(data.id)}">${body}
     <input class="field" placeholder="note for the model if you deny (optional)" aria-label="Note for the model">
-    <div class="row row--wrap"><button class="btn btn--primary btn--xs" data-answer="once">allow</button>${always ? `<button class="btn btn--ghost btn--xs" data-answer="always">${esc(always)}</button>` : ''}<button class="btn btn--ghost btn--xs" data-answer="deny">deny</button></div></div>`);
+    <div class="row row--wrap"><button class="btn btn--primary btn--xs" data-answer="once">Allow</button>${always ? `<button class="btn btn--ghost btn--xs" data-answer="always">${esc(always)}</button>` : ''}<button class="btn btn--ghost btn--xs" data-answer="deny">Deny</button></div></div>`);
   codeState('waiting for you');
   card.querySelector('[data-answer="once"]').focus({preventScroll: true});
   for (const button of card.querySelectorAll('[data-answer]')) {
@@ -459,7 +459,7 @@ async function runTask(event) {
       }
       else if (name === 'status') codeState(data.phase === 'running' ? `running ${data.command}` : data.phase === 'generating' ? 'thinking' : data.phase === 'loading' ? 'loading the model' : data.phase.startsWith('reading ') ? data.phase.replace('reading', 'reading history,') : data.phase);
       else if (name === 'reasoning') {
-        if (!think) { think = {text: '', el: logAppend('<details class="code__think"><summary>reasoning</summary><pre></pre></details>')}; }
+        if (!think) { think = {text: '', el: logAppend('<details class="code__think"><summary>Reasoning</summary><pre></pre></details>')}; }
         think.text += data.text; think.el.querySelector('pre').textContent = think.text;
       } else if (name === 'content') {
         think = null;
@@ -488,12 +488,12 @@ async function runTask(event) {
         const el = tools.get(data.id);
         if (el) { el.classList.remove('is-running'); el.classList.toggle('is-failed', !data.ok); el.querySelector('pre').textContent = data.output; }
       } else if (name === 'done') {
-        logAppend(`<div class="code__done"><span>${data.status === 'completed' ? 'done' : esc(data.status)}${data.tokens && data.tokens.input + data.tokens.output ? ` · ${(data.tokens.input + data.tokens.output).toLocaleString()} tokens` : ''}${data.plan_total ? ` · ${data.plan_done} of ${data.plan_total} plan items` : ''}${data.changes ? ` · ${data.changes} change${data.changes === 1 ? '' : 's'}` : ''}</span><span class="grow"></span>${data.changes ? `<button class="btn btn--ghost btn--xs" data-undo="${esc(data.run_id)}">undo this run</button>` : ''}</div>`);
+        logAppend(`<div class="code__done"><span>${data.status === 'completed' ? 'done' : esc(data.status)}${data.tokens && data.tokens.input + data.tokens.output ? ` · ${(data.tokens.input + data.tokens.output).toLocaleString()} tokens` : ''}${data.plan_total ? ` · ${data.plan_done} of ${data.plan_total} plan items` : ''}${data.changes ? ` · ${data.changes} change${data.changes === 1 ? '' : 's'}` : ''}</span><span class="grow"></span>${data.changes ? `<button class="btn btn--ghost btn--xs" data-undo="${esc(data.run_id)}">Undo this run</button>` : ''}</div>`);
         bindUndo();
       } else if (name === 'error') logAppend(`<p class="code__error">${esc(data.error)}</p>`);
     }
   } catch (error) {
-    if (error.name === 'AbortError') logAppend('<p class="code__error">stopped</p>');
+    if (error.name === 'AbortError') logAppend('<p class="code__error">Stopped</p>');
     else logAppend(`<p class="code__error">${esc(error.message || error)}</p>`);
   } finally {
     for (const card of $('code-log').querySelectorAll('.code__ask:not(.is-answered)')) closeApproval(card, 'expired: the run ended');
@@ -516,7 +516,7 @@ async function undoRun(runId, button) {
   try {
     const result = await post(`/api/code/runs/${encodeURIComponent(runId)}/undo`, {}, 30000);
     toast(result.skipped.length ? `Restored ${result.restored.length}; left ${result.skipped.join(', ')} (edited since)` : `Restored ${result.restored.length} file${result.restored.length === 1 ? '' : 's'}`);
-    button.textContent = 'undone';
+    button.textContent = 'Undone';
     for (const path of result.restored) code.changed.delete(path);
     for (const path of result.restored) fileChanged(path);
     refreshTree();
@@ -579,7 +579,7 @@ async function showHistory() {
   try {
     const runs = await api(projectApi('/runs'));
     $('code-log').innerHTML = runs.length
-      ? `<div class="code__runs"><span class="label">past runs</span>${runs.map((r) => `<button class="item item--run" data-run="${esc(r.id)}"><span class="item__main"><span>${esc(r.task.slice(0, 120))}</span><span class="readout">${esc(r.status)} · ${esc(shortModel(r.model))} · ${esc(when(r.created_at))}</span></span></button>`).join('')}</div>`
+      ? `<div class="code__runs"><span class="label">Past runs</span>${runs.map((r) => `<button class="item item--run" data-run="${esc(r.id)}"><span class="item__main"><span>${esc(r.task.slice(0, 120))}</span><span class="readout">${esc(r.status)} · ${esc(shortModel(r.model))} · ${esc(when(r.created_at))}</span></span></button>`).join('')}</div>`
       : '<p class="readout">No runs in this project yet.</p>';
     for (const row of $('code-log').querySelectorAll('[data-run]')) row.onclick = () => openRun(row.dataset.run);
   } catch (error) { fail(error); }
@@ -610,13 +610,13 @@ async function openRun(id) {
       if (pre) pre.textContent = p.output;
     }
     if (run.status === 'running') {
-      logAppend('<div class="code__done"><span>still working by itself · this page updates every 10 seconds</span><span class="grow"></span><button class="btn btn--ghost btn--xs" type="button" id="code-stop-run">stop it</button></div>');
+      logAppend('<div class="code__done"><span>still working by itself · this page updates every 10 seconds</span><span class="grow"></span><button class="btn btn--ghost btn--xs" type="button" id="code-stop-run">Stop it</button></div>');
       $('code-stop-run').onclick = () => stopRun(run.id);
       if (!code.watch) watchRun(run.id);
       return;
     }
     stopWatching();
-    logAppend(`<div class="code__done"><span>${esc(run.status)} · the next task continues this run</span><span class="grow"></span>${run.status !== 'undone' ? `<button class="btn btn--ghost btn--xs" data-undo="${esc(run.id)}">undo this run</button>` : ''}</div>`);
+    logAppend(`<div class="code__done"><span>${esc(run.status)} · the next task continues this run</span><span class="grow"></span>${run.status !== 'undone' ? `<button class="btn btn--ghost btn--xs" data-undo="${esc(run.id)}">Undo this run</button>` : ''}</div>`);
     bindUndo();
   } catch (error) { fail(error); }
 }
@@ -628,11 +628,11 @@ async function showBrief() {
     const brief = await api(projectApi('/brief'));
     stopWatching();
     if (!brief.text) {
-      $('code-log').innerHTML = '<div class="code__runs"><span class="label">project summary</span><p class="muted">None yet. Ferro64 writes one the first time it works on this project.</p></div>';
+      $('code-log').innerHTML = '<div class="code__runs"><span class="label">Project summary</span><p class="muted">None yet. Ferro64 writes one the first time it works on this project.</p></div>';
       return;
     }
     const state = brief.stale ? 'the project has changed a lot since this was written' : brief.edited ? 'your version, kept until you ask for a new one' : 'written by Ferro64 and given to each new session';
-    $('code-log').innerHTML = `<div class="code__runs"><div class="row"><span class="label grow">project summary</span><button class="btn btn--ghost btn--xs" type="button" id="code-brief-new">write a new one next run</button><button class="btn btn--primary btn--xs" type="button" id="code-brief-save">save</button></div><p class="muted">${esc(state)}</p><textarea class="field" id="code-brief-text" rows="14">${esc(brief.text)}</textarea></div>`;
+    $('code-log').innerHTML = `<div class="code__runs"><div class="row"><span class="label grow">Project summary</span><button class="btn btn--ghost btn--xs" type="button" id="code-brief-new">Write a new one next run</button><button class="btn btn--primary btn--xs" type="button" id="code-brief-save">Save</button></div><p class="muted">${esc(state)}</p><textarea class="field" id="code-brief-text" rows="14">${esc(brief.text)}</textarea></div>`;
     $('code-brief-save').onclick = async () => {
       try {
         await api(projectApi('/brief'), {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: $('code-brief-text').value})});
@@ -655,8 +655,8 @@ async function showNotes() {
   try {
     const {enabled, items} = await api(projectApi('/notes'));
     const scope = (n) => (n.project_id ? 'this project' : 'every project');
-    const rows = items.map((n) => `<details class="code__note${n.state === 'active' ? '' : ' is-old'}"><summary><span class="grow">${esc(n.title)}</span><span class="readout">${n.state === 'active' ? esc(scope(n)) : 'replaced'}</span></summary><p>${esc(n.body)}</p>${n.source_path ? `<p class="readout">from ${esc(n.source_path)}</p>` : ''}<div class="row">${n.state === 'active' ? '' : `<button class="btn btn--ghost btn--xs" data-note-restore="${esc(n.id)}">restore</button>`}<button class="btn btn--ghost btn--xs" data-note-delete="${esc(n.id)}">delete</button></div></details>`).join('');
-    $('code-log').innerHTML = `<div class="code__runs"><div class="row"><span class="label grow">notes from earlier work</span><button class="btn btn--ghost btn--xs" id="code-notes-toggle">${enabled ? 'turn off' : 'turn on'}</button></div><p class="readout">${enabled ? 'The agent is shown matching notes and can save new ones.' : 'Off: the agent cannot see or save notes. Use this for clean model tests.'}</p>${rows || '<p class="readout">No notes yet.</p>'}</div>`;
+    const rows = items.map((n) => `<details class="code__note${n.state === 'active' ? '' : ' is-old'}"><summary><span class="grow">${esc(n.title)}</span><span class="readout">${n.state === 'active' ? esc(scope(n)) : 'replaced'}</span></summary><p>${esc(n.body)}</p>${n.source_path ? `<p class="readout">from ${esc(n.source_path)}</p>` : ''}<div class="row">${n.state === 'active' ? '' : `<button class="btn btn--ghost btn--xs" data-note-restore="${esc(n.id)}">Restore</button>`}<button class="btn btn--ghost btn--xs" data-note-delete="${esc(n.id)}">Delete</button></div></details>`).join('');
+    $('code-log').innerHTML = `<div class="code__runs"><div class="row"><span class="label grow">Notes from earlier work</span><button class="btn btn--ghost btn--xs" id="code-notes-toggle">${enabled ? 'turn off' : 'turn on'}</button></div><p class="readout">${enabled ? 'The agent is shown matching notes and can save new ones.' : 'Off: the agent cannot see or save notes. Use this for clean model tests.'}</p>${rows || '<p class="readout">No notes yet.</p>'}</div>`;
     $('code-notes-toggle').onclick = async () => {
       try { await post('/api/code/notes/settings', {enabled: !enabled}, 15000); showNotes(); } catch (error) { fail(error); }
     };
@@ -677,7 +677,7 @@ async function showPermissions() {
   if (!code.project) return;
   try {
     const allowed = await api(projectApi('/permissions'));
-    $('code-log').innerHTML = `<div class="code__runs"><span class="label">always allowed in this project</span>${allowed.length ? allowed.map((p) => `<div class="row"><code class="grow">${esc(p)}</code><button class="btn btn--ghost btn--xs" data-revoke="${esc(p)}">remove</button></div>`).join('') : '<p class="readout">Nothing yet. Commands ask each time until you choose “always allow”. Commands that delete, change the system, push or use the network always ask.</p>'}</div>`;
+    $('code-log').innerHTML = `<div class="code__runs"><span class="label">Always allowed in this project</span>${allowed.length ? allowed.map((p) => `<div class="row"><code class="grow">${esc(p)}</code><button class="btn btn--ghost btn--xs" data-revoke="${esc(p)}">Remove</button></div>`).join('') : '<p class="readout">Nothing yet. Commands ask each time until you choose “always allow”. Commands that delete, change the system, push or use the network always ask.</p>'}</div>`;
     for (const button of $('code-log').querySelectorAll('[data-revoke]')) {
       button.onclick = async () => {
         try { await api(projectApi('/permissions'), {method: 'DELETE', body: JSON.stringify({prefix: button.dataset.revoke})}); showPermissions(); }
@@ -776,7 +776,7 @@ function endTerminal() {
 async function startTerminal() {
   try { await loadXterm(); } catch (error) { fail(error); return; }
   if (!term.xterm) {
-    term.xterm = new window.Terminal({fontFamily: '"Geist Mono", ui-monospace, "SF Mono", monospace', fontSize: 12.5, cursorBlink: true, scrollback: 5000, theme: termTheme(), allowProposedApi: false});
+    term.xterm = new window.Terminal({fontFamily: '"Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", monospace', fontSize: 12.5, cursorBlink: true, scrollback: 5000, theme: termTheme(), allowProposedApi: false});
     term.fit = new window.FitAddon.FitAddon();
     term.xterm.loadAddon(term.fit);
     term.xterm.open($('code-term'));
@@ -830,9 +830,9 @@ function bindCode() {
   $('code-thinking').onclick = () => { code.thinking = !code.thinking; store.set('codeThinking', code.thinking ? '1' : '0'); renderCodeModels(); };
   $('code-new').onclick = newTask;
   $('code-history').onclick = showHistory;
-  $('code-perms').insertAdjacentHTML('beforebegin', '<button class="btn btn--ghost btn--xs" type="button" id="code-notes">notes</button>');
+  $('code-perms').insertAdjacentHTML('beforebegin', '<button class="btn btn--ghost btn--xs" type="button" id="code-notes">Notes</button>');
   $('code-notes').onclick = showNotes;
-  $('code-perms').insertAdjacentHTML('beforebegin', '<button class="btn btn--ghost btn--xs" type="button" id="code-brief">summary</button>');
+  $('code-perms').insertAdjacentHTML('beforebegin', '<button class="btn btn--ghost btn--xs" type="button" id="code-brief">Summary</button>');
   $('code-brief').onclick = showBrief;
   setInterval(paintCodeState, 1000);
   $('code-perms').onclick = showPermissions;

@@ -8,12 +8,15 @@ const store = {
   get(key) { try { return localStorage.getItem(`ferro64.${key}`); } catch { return null; } },
   set(key, value) { try { localStorage.setItem(`ferro64.${key}`, value); } catch { /* storage is optional */ } },
 };
-const VIEWS = ['chat', 'documents', 'images', 'video', 'agents', 'code', 'settings', 'api'];
+const VIEWS = ['chat', 'documents', 'images', 'video', 'agents', 'code', 'settings', 'api', 'assistant'];
 const EFFORTS = (BOOT.efforts || []).map((e) => e.value);
 const TEMPERATURES = (BOOT.temperatures || []).map((t) => t.value);
 const IMAGE_NOTES = {
-  'flux2-klein': 'flux.2 klein 4b · 1024 px · about a minute · also edits',
-  'z-image-turbo': 'z-image-turbo · 1024 px · about 2.5 minutes',
+  'flux2-klein': 'FLUX.2 Klein 4B · 1024 px · about a minute · also edits',
+  'z-image-turbo': 'Z-Image-Turbo · 1024 px · about 2.5 minutes',
+  'flux1-schnell': 'FLUX.1 schnell · 1024 px · 4 steps · no Qwen: prompts read by T5 and CLIP',
+  'sd35-turbo': 'SD 3.5 Large Turbo · 1024 px · 4 steps · no Qwen: prompts read by T5 and CLIP',
+  'sdxl': 'SDXL 1.0 · 1024 px · 25 steps · no Qwen · works best with short, keyword-style prompts',
 };
 
 const state = {
@@ -84,7 +87,7 @@ function duration(ms) {
 }
 function bytes(n) {
   if (!n) return '';
-  return n >= 1e9 ? `${(n / 1e9).toFixed(1)} gb` : `${Math.round(n / 1e6)} mb`;
+  return n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.round(n / 1e6)} MB`;
 }
 function when(value) {
   const date = new Date(value);
@@ -248,21 +251,34 @@ function setView(view, push = true) {
   if (view === 'api' && typeof openHostedView === 'function') openHostedView();
   if (view === 'code' && typeof openCodeView === 'function') openCodeView();
   if (view === 'video' && typeof openVideoView === 'function') openVideoView();
+  if (view === 'assistant' && typeof openAssistantView === 'function') openAssistantView();
   if (view === 'chat') setTimeout(() => $('prompt').focus(), 0);
 }
 function openRail() { $('rail').classList.add('is-open'); $('scrim').hidden = false; }
 function closeRail() { $('rail').classList.remove('is-open'); $('scrim').hidden = true; }
 
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  if (typeof refreshTerminalTheme === 'function') refreshTerminalTheme();
-  $('theme-toggle').innerHTML = icon(theme === 'day' ? 'moon' : 'sun');
-}
-function initialTheme() {
+/* Appearance: light, dark or system (follows the computer). The page head
+   applies it before drawing; this keeps it current. */
+const THEME_MODES = ['system', 'light', 'dark'];
+const systemLight = () => Boolean(window.matchMedia?.('(prefers-color-scheme: light)').matches);
+function themeMode() {
   const saved = store.get('theme');
-  if (saved === 'day' || saved === 'night') return saved;
-  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'day' : 'night';
+  if (saved === 'day') return 'light';
+  if (saved === 'night') return 'dark';
+  return THEME_MODES.includes(saved) ? saved : 'system';
 }
+function applyTheme(mode = themeMode()) {
+  const light = mode === 'light' || (mode === 'system' && systemLight());
+  document.documentElement.dataset.theme = light ? 'day' : 'night';
+  document.documentElement.dataset.themeMode = mode;
+  if (typeof refreshTerminalTheme === 'function') refreshTerminalTheme();
+  const toggle = $('theme-toggle');
+  toggle.innerHTML = icon({system: 'display', light: 'sun', dark: 'moon'}[mode]);
+  toggle.setAttribute('aria-label', `Appearance: ${mode}`);
+  toggle.title = `Appearance: ${mode} (click for ${THEME_MODES[(THEME_MODES.indexOf(mode) + 1) % 3]})`;
+  if ($('theme-mode')) setRadio($('theme-mode'), mode, 'themeMode');
+}
+function setThemeMode(mode) { store.set('theme', mode); applyTheme(mode); }
 
 /* ---------- status ---------- */
 
@@ -283,7 +299,7 @@ async function refreshStatus() {
     const engines = {sdcpp: 'stable-diffusion.cpp', mlx: 'mflux', ollama: 'ollama'};
     $('image-backend').textContent = `${engines[status.image_backend] || status.image_backend} · text models unload first`;
     renderImageModels();
-    $('runtime-model').textContent = state.loading ? `loading ${shortModel(state.loading)}…` : resident.length ? `${resident.map(shortModel).join(', ')} · resident` : 'nothing resident';
+    $('runtime-model').textContent = state.loading ? `Loading ${shortModel(state.loading)}…` : resident.length ? `${resident.map(shortModel).join(', ')} · resident` : 'Nothing resident';
     for (const model of state.models) model.is_resident = resident.includes(model.id);
     if (!online && status.runtime_error) {
       showBanner(esc(status.runtime_error), state.view === 'settings' ? 'refresh' : 'open settings', () => {
@@ -296,7 +312,7 @@ async function refreshStatus() {
     if (state.view === 'settings') renderModelsView();
   } catch (error) {
     $('runtime-dot').className = 'dot is-off';
-    $('runtime-model').textContent = 'server unreachable';
+    $('runtime-model').textContent = 'Server unreachable';
     showBanner('Cannot reach the Ferro64 server. Start it with <code>cargo run --release</code>.', 'retry', refreshAll);
   }
 }
@@ -332,7 +348,7 @@ async function loadModels() {
   const chats = chatModels();
   if (!chats.some((m) => m.id === state.model)) {
     // The strongest general model that is installed, in order of preference.
-    const preferred = ['qwen3.5:35b-a3b', 'glm-4.7-flash', 'qwen3.5:9b'];
+    const preferred = ['qwen3.6:35b-a3b', 'gemma4:31b', 'qwen3.5:9b'];
     state.model = (preferred.map((id) => chats.find((m) => m.id === id)).find(Boolean) || chats.find((m) => m.is_resident) || chats[0])?.id || null;
   }
   renderPicker();
@@ -487,7 +503,7 @@ function openFromHash() {
 function newChat() {
   if (state.busy) return;
   state.conversation = null;
-  $('chat-title').textContent = 'new conversation';
+  $('chat-title').textContent = 'New conversation';
   $('prompt').value = '';
   autosize();
   clearAttachment();
@@ -502,13 +518,13 @@ function showHero() {
   const model = current();
   $('chat-log').innerHTML = `
     <div class="hero">
-      <h2>what shall we <span class="verb">work</span> on</h2>
+      <h2>What shall we work on?</h2>
       <p class="lead">A private assistant on your own hardware. Nothing you type leaves this machine.</p>
       <div class="hero__grid">
-        <button class="suggest" data-prompt="Explain how this works, step by step, with a small example: "><strong>explain something</strong><span>a concept, a paper, a tool</span></button>
-        <button class="suggest" data-prompt="Review this code for bugs and readability, then suggest a cleaner version:\n\n"><strong>review code</strong><span>bugs, clarity, a better version</span></button>
-        <button class="suggest" data-prompt="Draft a short, friendly message that says: "><strong>draft a message</strong><span>email, note, announcement</span></button>
-        <button class="suggest" data-prompt="Help me plan this. Ask me two questions first, then give a step-by-step plan: "><strong>plan a project</strong><span>steps, risks, a first move</span></button>
+        <button class="suggest" data-prompt="Explain how this works, step by step, with a small example: "><strong>Explain something</strong><span>A concept, a paper, a tool</span></button>
+        <button class="suggest" data-prompt="Review this code for bugs and readability, then suggest a cleaner version:\n\n"><strong>Review code</strong><span>Bugs, clarity, a better version</span></button>
+        <button class="suggest" data-prompt="Draft a short, friendly message that says: "><strong>Draft a message</strong><span>Email, note, announcement</span></button>
+        <button class="suggest" data-prompt="Help me plan this. Ask me two questions first, then give a step-by-step plan: "><strong>Plan a project</strong><span>Steps, risks, a first move</span></button>
       </div>
       <p class="readout hero__foot">${model ? `${esc(shortModel(model.id))} on ${esc(BOOT.engine)} · effort ${esc(state.effort)}` : `${esc(BOOT.engine)} · no model selected`}</p>
     </div>`;
@@ -527,7 +543,7 @@ function userTurn(message) {
   const sheet = isSheetURL(message.image_url);
   const image = sheet ? '' : localURL(message.image_url, true);
   const {doc, request} = splitDocument(message.content);
-  element.innerHTML = `${sheet ? `<span class="tag bubble__file">spreadsheet</span>` : ''}${image ? `<img class="bubble__image" src="${esc(image)}" alt="Attachment">` : ''}${doc ? `<details class="reasoning bubble__doc"><summary>${icon('doc')}<span class="grow">document text · ${doc.length.toLocaleString()} chars</span>${icon('chev', 'chev')}</summary><div class="reasoning__body">${esc(doc)}</div></details>` : ''}${request ? `<div class="bubble">${esc(request)}</div>` : ''}`;
+  element.innerHTML = `${sheet ? `<span class="tag bubble__file">Spreadsheet</span>` : ''}${image ? `<img class="bubble__image" src="${esc(image)}" alt="Attachment">` : ''}${doc ? `<details class="reasoning bubble__doc"><summary>${icon('doc')}<span class="grow">document text · ${doc.length.toLocaleString()} chars</span>${icon('chev', 'chev')}</summary><div class="reasoning__body">${esc(doc)}</div></details>` : ''}${request ? `<div class="bubble">${esc(request)}</div>` : ''}`;
   return element;
 }
 function metaLine(model, stats = {}, content = '') {
@@ -538,15 +554,15 @@ function metaLine(model, stats = {}, content = '') {
   if (stats.load_ms) parts.push(`<span class="readout" title="Model load time">load ${duration(stats.load_ms)}</span>`);
   if (stats.effort) parts.push(`<span class="readout">effort ${esc(stats.effort)}</span>`);
   if (stats.temperature && stats.temperature !== 'balanced') parts.push(`<span class="readout">${esc(stats.temperature)}</span>`);
-  if (stats.cancelled) parts.push('<span class="readout is-brass">stopped</span>');
-  else if (stats.finish_reason === 'length') parts.push('<span class="readout is-brass" title="Raise the effort for a longer budget">cut off at budget</span>');
+  if (stats.cancelled) parts.push('<span class="readout is-brass">Stopped</span>');
+  else if (stats.finish_reason === 'length') parts.push('<span class="readout is-brass" title="Raise the effort for a longer budget">Cut off at budget</span>');
   return `${parts.join('')}<button class="icon-btn" data-copy aria-label="Copy answer" title="Copy answer">${icon('copy')}</button>`;
 }
 function assistantTurn(message) {
   const element = document.createElement('article');
   element.className = 'turn turn--assistant';
   element.innerHTML = `
-    <details class="reasoning" hidden><summary>${icon('brain')}<span class="grow">reasoning</span>${icon('chev', 'chev')}</summary><div class="reasoning__body"></div></details>
+    <details class="reasoning" hidden><summary>${icon('brain')}<span class="grow">Reasoning</span>${icon('chev', 'chev')}</summary><div class="reasoning__body"></div></details>
     <div class="prose"></div>
     <div class="sources" hidden></div>
     <div class="meta"></div>`;
@@ -819,9 +835,9 @@ async function setOcrFile(file) {
     const image = localURL(state.ocr.data, true);
     $('drop').hidden = true;
     $('ocr-preview').hidden = false;
-    $('ocr-preview').innerHTML = `${image ? `<img src="${esc(image)}" alt="Selected document">` : `<span class="tag">${icon('doc')}${esc(file.name)}</span>`}<button class="btn btn--ghost btn--xs" id="ocr-change">choose another</button>`;
+    $('ocr-preview').innerHTML = `${image ? `<img src="${esc(image)}" alt="Selected document">` : `<span class="tag">${icon('doc')}${esc(file.name)}</span>`}<button class="btn btn--ghost btn--xs" id="ocr-change">Choose another</button>`;
     $('ocr-change').onclick = () => $('ocr-file').click();
-    $('ocr-meta').textContent = 'ready';
+    $('ocr-meta').textContent = 'Ready';
   } catch (error) { fail(error); }
 }
 async function extractText() {
@@ -836,8 +852,8 @@ async function extractText() {
     $('ocr-copy').disabled = !has; $('ocr-chat').disabled = !has;
     $('ocr-meta').textContent = has ? `${result.text.length.toLocaleString()} chars · ${result.engine || 'local ocr'}` : 'no text found';
     if (!has) toast('No text was recognized. Try a sharper image.', true);
-  } catch (error) { $('ocr-meta').textContent = 'failed'; fail(error); }
-  finally { state.ocr.busy = false; button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'extract text'; }
+  } catch (error) { $('ocr-meta').textContent = 'Failed'; fail(error); }
+  finally { state.ocr.busy = false; button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Extract text'; }
 }
 
 /* ---------- images ---------- */
@@ -846,7 +862,7 @@ function showImage(item) {
   const url = localURL(item.image_url);
   if (!url) return;
   $('canvas').classList.remove('blueprint');
-  $('canvas').innerHTML = `<div class="canvas__result"><img src="${esc(url)}" alt="${esc(item.prompt)}"><div class="row"><span class="readout grow">${item.width}×${item.height} · ${esc(duration(item.duration_ms))} · ${esc(item.backend || 'local')}</span><button class="btn btn--ghost btn--xs" id="canvas-edit">edit</button><a class="btn btn--ghost btn--xs" href="${esc(url)}" download="ferro64-${esc(item.id)}.png">save</a></div></div>`;
+  $('canvas').innerHTML = `<div class="canvas__result"><img src="${esc(url)}" alt="${esc(item.prompt)}"><div class="row"><span class="readout grow">${item.width}×${item.height} · ${esc(duration(item.duration_ms))} · ${esc(item.backend || 'local')}</span><button class="btn btn--ghost btn--xs" id="canvas-edit">Edit</button><a class="btn btn--ghost btn--xs" href="${esc(url)}" download="ferro64-${esc(item.id)}.png">Save</a></div></div>`;
   $('canvas-edit').onclick = () => startEdit({id: item.id, url, name: item.prompt});
 }
 function startEdit(edit) {
@@ -893,7 +909,7 @@ function renderImageModels() {
   if (!sdcpp) return;
   note.innerHTML = !current ? '' : current.ready
     ? esc(IMAGE_NOTES[state.imageModel] || '')
-    : `${esc(current.name.toLowerCase())} is not downloaded · <a href="#models">get it in models</a>`;
+    : `${esc(current.missing || `${current.name} is not downloaded yet.`)} · <a href="#models">Get it in models</a>`;
   const flux = models.find((m) => m.id === 'flux2-klein');
   $('generate').disabled = state.imageBusy || (state.edit ? flux && !flux.ready : current && !current.ready);
   $('photo-button').disabled = state.imageBusy || (flux && !flux.ready);
@@ -947,7 +963,7 @@ async function loadGallery() {
 function fillAgentSelects() {
   const models = chatModels();
   // A strong Qwen drafts and writes the result; another maker reviews.
-  const defaults = {'agent-planner': ['qwen3.5:35b-a3b', 'qwen3.5:9b', 'qwen3:8b'], 'agent-reviewer': ['nemotron-3-nano:30b-a3b', 'glm-4.7-flash', 'qwen3.5:9b'], 'agent-synth': ['qwen3.5:35b-a3b', 'qwen3.5:9b', 'qwen3:8b']};
+  const defaults = {'agent-planner': ['qwen3.6:35b-a3b', 'gemma4:31b', 'qwen3.5:9b'], 'agent-reviewer': ['nemotron-3-nano:30b-a3b', 'gemma4:31b', 'qwen3.5:9b'], 'agent-synth': ['qwen3.6:35b-a3b', 'gemma4:31b', 'qwen3.5:9b']};
   for (const [id, preferred] of Object.entries(defaults)) {
     const select = $(id); const old = select.value;
     select.innerHTML = models.length ? models.map((m) => `<option value="${esc(m.id)}">${esc(m.name || shortModel(m.id))}</option>`).join('') : '<option value="">no chat models</option>';
@@ -958,8 +974,8 @@ function fillAgentSelects() {
 }
 function renderTrack(task) {
   const roles = ['Planner', 'Reviewer', 'Synthesizer'];
-  const labels = ['draft', 'review', 'synthesis'];
-  const steps = task?.steps || [];
+  const labels = ['Draft', 'Review', 'Synthesis'];
+  const steps = (task?.steps || []).filter((s) => roles.includes(s.role));
   return `<div class="track">${roles.map((role, i) => {
     const step = steps.find((s) => s.role === role);
     const running = !step && steps.length === i && task?.status === 'running';
@@ -972,7 +988,7 @@ function renderAgentResult(task, live = false) {
     ${renderTrack(task)}
     ${live ? '' : `<article class="well result"><div class="result__head"><h3>${task.status === 'completed' ? 'result' : esc(task.status)}</h3><span class="row"><span class="readout">${esc(duration(task.total_duration_ms))}</span><button class="icon-btn" id="agent-copy" aria-label="Copy result">${icon('copy')}</button></span></div>
       <div class="prose">${markdown(finalText)}</div>
-      ${(task.steps || []).map((s) => `<details class="step"><summary><span class="readout">0${s.step_index} · ${esc(s.role.toLowerCase())}</span><span class="readout">${esc(shortModel(s.model))} · ${esc(duration(s.duration_ms))}</span></summary><div class="prose">${markdown(s.output)}</div></details>`).join('')}
+      ${(task.steps || []).map((s) => `<details class="step"><summary><span class="readout">${s.role === 'Reader' ? `document · ${esc(s.description.replace(/^What the stages were given from /, ''))}` : `0${s.step_index} · ${esc(s.role.toLowerCase())}`}</span><span class="readout">${esc(shortModel(s.model))} · ${esc(duration(s.duration_ms))}</span></summary><div class="prose">${markdown(s.output)}</div></details>`).join('')}
     </article>`}`;
   bindCodeCopy($('agent-live'));
   if (!live) $('agent-copy').onclick = () => copyText(task.final_result || '');
@@ -980,7 +996,7 @@ function renderAgentResult(task, live = false) {
 async function loadTasks() {
   state.tasks = await api('/api/agent/tasks');
   if (!state.tasks.length) { $('agent-history').innerHTML = '<p class="empty">Workflow runs and every stage are saved here.</p>'; return; }
-  $('agent-history').innerHTML = state.tasks.map((t, i) => `<button class="item item--run" data-task="${i}"><span class="item__main"><span class="item__title"><strong>${esc(t.goal.length > 120 ? `${t.goal.slice(0, 117)}…` : t.goal)}</strong></span><span class="item__specs"><span class="readout">${esc(when(t.created_at))}</span><span class="readout">${(t.steps || []).length}/3 stages</span><span class="readout">${esc(duration(t.total_duration_ms))}</span></span></span><span class="tag status-tag ${t.status === 'failed' ? 'is-failed' : t.status === 'running' ? 'is-running' : ''}">${esc(t.status)}</span></button>`).join('');
+  $('agent-history').innerHTML = state.tasks.map((t, i) => `<button class="item item--run" data-task="${i}"><span class="item__main"><span class="item__title"><strong>${esc(t.goal.length > 120 ? `${t.goal.slice(0, 117)}…` : t.goal)}</strong></span><span class="item__specs"><span class="readout">${esc(when(t.created_at))}</span><span class="readout">${(t.steps || []).filter((s) => s.role !== 'Reader').length}/3 stages</span>${(t.steps || []).some((s) => s.role === 'Reader') ? '<span class="readout">With a document</span>' : ''}<span class="readout">${esc(duration(t.total_duration_ms))}</span></span></span><span class="tag status-tag ${t.status === 'failed' ? 'is-failed' : t.status === 'running' ? 'is-running' : ''}">${esc(t.status.replace(/^./, (c) => c.toUpperCase()))}</span></button>`).join('');
   for (const button of $('agent-history').querySelectorAll('[data-task]')) button.onclick = () => {
     if (state.agentBusy) return toast('Wait for the current run to finish.', true);
     renderAgentResult(state.tasks[Number(button.dataset.task)]);
@@ -997,7 +1013,7 @@ async function runAgent(event) {
   state.agentBusy = true;
   const button = $('agent-run');
   button.disabled = true; button.innerHTML = '<span class="spinner"></span>running';
-  for (const id of ['agent-goal', 'agent-planner', 'agent-reviewer', 'agent-synth']) $(id).disabled = true;
+  for (const id of ['agent-goal', 'agent-planner', 'agent-reviewer', 'agent-synth', 'agent-attach-button', 'agent-attach-clear']) $(id).disabled = true;
   const startedAt = Date.now();
   renderAgentResult({status: 'running', steps: []}, true);
   // The run is saved after each stage; poll to show progress while it works.
@@ -1009,7 +1025,9 @@ async function runAgent(event) {
     } catch { /* progress is best effort */ }
   }, 2000);
   try {
-    const task = await post('/api/agent/run', {goal, planner_model: models[0], reviewer_model: models[1], synthesizer_model: models[2], effort: state.agentEffort, thinking: state.agentThinking}, 3600000);
+    const doc = state.agentDoc;
+    const task = await post('/api/agent/run', {goal, planner_model: models[0], reviewer_model: models[1], synthesizer_model: models[2], effort: state.agentEffort, thinking: state.agentThinking,
+      attachment: doc?.data || null, document_text: doc?.text || null, attachment_name: doc?.name || null}, 3600000);
     clearInterval(poll);
     renderAgentResult(task);
   } catch (error) {
@@ -1021,11 +1039,43 @@ async function runAgent(event) {
   } finally {
     clearInterval(poll);
     state.agentBusy = false;
-    button.disabled = false; button.textContent = 'run workflow';
-    for (const id of ['agent-goal', 'agent-planner', 'agent-reviewer', 'agent-synth']) $(id).disabled = false;
+    button.disabled = false; button.textContent = 'Run workflow';
+    for (const id of ['agent-goal', 'agent-planner', 'agent-reviewer', 'agent-synth', 'agent-attach-button', 'agent-attach-clear']) $(id).disabled = false;
     loadTasks().catch(() => {});
     refreshStatus();
   }
+}
+
+/* A document or picture for the workflow. Text files are read here; PDFs,
+   Word files and pictures go to the server, which reads them once. */
+const AGENT_DOC_BYTES = 20 * 1024 * 1024;
+const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+async function attachAgentDoc(file) {
+  if (!file) return;
+  if (file.size > AGENT_DOC_BYTES) return toast('That file is over 20 MB. Split it, or attach a smaller one.', true);
+  const ext = file.name.split('.').pop().toLowerCase();
+  try {
+    if (['xlsx', 'xls', 'xlsm', 'ods'].includes(ext)) return toast('For spreadsheets, attach them in chat: it runs real queries on the data.', true);
+    if (ext === 'pdf' || /^image\/(png|jpeg|webp)$/.test(file.type)) {
+      state.agentDoc = {name: file.name, data: await fileToData(file)};
+    } else if (ext === 'docx') {
+      const data = await fileToData(file);
+      state.agentDoc = {name: file.name, data: data.replace(/^data:[^;]*;/, `data:${DOCX_TYPE};`)};
+    } else if (ext === 'doc') {
+      return toast('Old .doc files are not supported. Save it as .docx or PDF first.', true);
+    } else {
+      const text = await file.text();
+      if (text.includes('\u0000')) return toast('That file is not text. Attach a PDF, Word file, text file or picture.', true);
+      state.agentDoc = {name: file.name, text};
+    }
+  } catch (error) { return fail(error); }
+  renderAgentDoc();
+}
+function renderAgentDoc() {
+  const doc = state.agentDoc;
+  $('agent-attachment').textContent = doc ? `attached: ${doc.name}${doc.text ? ` · ${doc.text.length.toLocaleString()} characters` : ''}` : 'PDF, Word, text, code or a picture · read on this machine';
+  $('agent-attach-clear').hidden = !doc;
+  $('agent-file').value = '';
 }
 
 /* ---------- models view ---------- */
@@ -1057,11 +1107,11 @@ function renderModelsView() {
       const loading = state.loading === m.id;
       return `<div class="item">
         <div class="item__main">
-          <div class="item__title"><span class="dot ${m.is_resident ? 'is-live' : loading ? 'is-busy' : ''}"></span><strong>${esc(m.name || shortModel(m.id))}</strong>${modelTags(m).map((t) => `<span class="tag">${t}</span>`).join('')}${m.installed === false ? '<span class="tag">unverified</span>' : ''}</div>
+          <div class="item__title"><span class="dot ${m.is_resident ? 'is-live' : loading ? 'is-busy' : ''}"></span><strong>${esc(m.name || shortModel(m.id))}</strong>${modelTags(m).map((t) => `<span class="tag">${t}</span>`).join('')}${m.installed === false ? '<span class="tag">Unverified</span>' : ''}</div>
           <p class="item__desc">${esc(m.role_description || '')}</p>
           <div class="item__specs"><span class="readout">${esc(m.id)}</span>${modelSpecs(m).map((s) => `<span class="readout">${esc(s)}</span>`).join('')}${chat ? `<span class="readout">${esc(thinkingNote(m))}</span>` : ''}</div>
         </div>
-        <div class="item__actions">${chat && m.installed !== false ? `<button class="btn btn--ghost btn--xs" data-load="${esc(m.id)}" ${m.is_resident || loading || state.busy ? 'disabled' : ''}>${m.is_resident ? 'resident' : loading ? 'loading…' : 'load'}</button><button class="btn btn--primary btn--xs" data-use="${esc(m.id)}">use in chat</button>` : ''}${catalogIds().has(m.id) ? `<button class="btn btn--ghost btn--xs" data-remove="${esc(m.id)}">remove</button>` : ''}</div>
+        <div class="item__actions">${chat && m.installed !== false ? `<button class="btn btn--ghost btn--xs" data-load="${esc(m.id)}" ${m.is_resident || loading || state.busy ? 'disabled' : ''}>${m.is_resident ? 'resident' : loading ? 'loading…' : 'load'}</button><button class="btn btn--primary btn--xs" data-use="${esc(m.id)}">Use in chat</button>` : ''}${catalogIds().has(m.id) ? `<button class="btn btn--ghost btn--xs" data-remove="${esc(m.id)}">Remove</button>` : ''}</div>
       </div>`;
     }).join('');
     for (const button of $('installed').querySelectorAll('[data-use]')) button.onclick = () => { selectModel(button.dataset.use, {preload: false}); setView('chat'); };
@@ -1108,21 +1158,21 @@ function renderCatalog() {
     const fitClass = entry.fit === 'good' && entry.dense ? 'tight' : entry.fit;
     return `<div class="item${entry.fit === 'no' && !installed ? ' item--nofit' : ''}">
       <div class="item__main">
-        <div class="item__title"><strong>${esc(entry.name)}</strong>${best.length ? `<span class="tag tag--best">best here for ${esc(best.join(', '))}</span>` : ''}${needsReader(entry.id) ? '<span class="tag tag--best">needed for images</span>' : ''}${fitTag ? `<span class="tag tag--fit-${esc(fitClass)}">${esc(fitTag)}</span>` : ''}${tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+        <div class="item__title"><strong>${esc(entry.name)}</strong>${best.length ? `<span class="tag tag--best">best here for ${esc(best.join(', '))}</span>` : ''}${needsReader(entry.id) ? '<span class="tag tag--best">Needed for images</span>' : ''}${fitTag ? `<span class="tag tag--fit-${esc(fitClass)}">${esc(fitTag)}</span>` : ''}${tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
         <p class="item__desc">${esc(entry.role)}</p>
         ${entry.fit_note ? `<p class="item__fit">${esc(entry.fit_note)}${entry.dense ? '. A dense model: about 11–15 tok/s on an M1 Max, against about 50 for the A3B models' : ''}</p>` : ''}
         <div class="item__specs"><span class="readout">${esc(entry.id)}</span><span class="readout">${esc(bytes(entry.size_bytes))}</span><a class="readout" href="${esc(entry.source)}" target="_blank" rel="noopener noreferrer">${esc(entry.source.replace('https://huggingface.co/', 'hf/'))}</a></div>
         ${busy ? `<div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div><span class="readout">${job.status === 'queued' ? 'queued' : `${pct}% · ${bytes(job.downloaded_bytes)} of ${bytes(job.total_bytes)}`}</span>` : ''}
         ${job?.status === 'failed' ? `<p class="item__error">${esc(job.error || 'Download failed')}</p>` : ''}
       </div>
-      <div class="item__actions">${installed ? `<span class="tag">on disk</span><button class="btn btn--ghost btn--xs" data-remove="${esc(entry.id)}">remove</button>` : entry.fit === 'no' && !busy ? `<button class="btn btn--ghost btn--xs" data-download="${esc(entry.id)}" data-anyway="1" title="${esc(entry.fit_note)}">download anyway</button>` : `<button class="btn ${busy ? 'btn--ghost' : 'btn--primary'} btn--xs" data-download="${esc(entry.id)}" ${busy ? 'disabled' : ''}>${busy ? 'downloading' : job?.status === 'failed' ? 'retry' : 'download'}</button>`}</div>
+      <div class="item__actions">${installed ? `<span class="tag">On disk</span><button class="btn btn--ghost btn--xs" data-remove="${esc(entry.id)}">Remove</button>` : entry.fit === 'no' && !busy ? `<button class="btn btn--ghost btn--xs" data-download="${esc(entry.id)}" data-anyway="1" title="${esc(entry.fit_note)}">Download anyway</button>` : `<button class="btn ${busy ? 'btn--ghost' : 'btn--primary'} btn--xs" data-download="${esc(entry.id)}" ${busy ? 'disabled' : ''}>${busy ? 'downloading' : job?.status === 'failed' ? 'retry' : 'download'}</button>`}</div>
     </div>`;
   };
   const picks = sorted.filter(isPick);
   const more = sorted.filter((entry) => !isPick(entry));
   const total = picks.filter((e) => !e.installed).reduce((sum, e) => sum + e.size_bytes, 0);
   $('catalog').innerHTML = machineSummary()
-    + `<div class="section-sub"><span class="label">recommended for this machine</span>${total ? `<span class="readout">${esc(bytes(total))} left to download</span>` : ''}</div>`
+    + `<div class="section-sub"><span class="label">Recommended for this machine</span>${total ? `<span class="readout">${esc(bytes(total))} left to download</span>` : ''}</div>`
     + picks.map(row).join('')
     + (more.length ? `<details class="more-models" id="more-models"${state.moreModelsOpen ? ' open' : ''}><summary>more models <span class="readout">${more.length}</span></summary>${more.map(row).join('')}</details>` : '');
   const moreEl = $('more-models');
@@ -1148,9 +1198,9 @@ function machineSummary() {
   const picks = [['chat', rec.chat], ['code', rec.code], ['agents', rec.agents && rec.reviewer ? `${name(rec.agents)} with ${name(rec.reviewer)} reviewing` : rec.agents], ['images', rec.images], ['image edits', rec.edits], ['search by meaning', rec.search]]
     .filter(([, id]) => id).map(([job, id]) => {
       const slow = (state.store.catalog || []).find((e) => e.id === (rec[job] || id))?.fit === 'tight';
-      return `<li><span class="readout">${esc(job)}</span> ${esc(name(id) || id)}${slow ? ' <span class="tag tag--fit-tight">slow here</span>' : ''}</li>`;
+      return `<li><span class="readout">${esc(job)}</span> ${esc(name(id) || id)}${slow ? ' <span class="tag tag--fit-tight">Slow here</span>' : ''}</li>`;
     }).join('');
-  return `<div class="well well--pad machine"><span class="label">for this machine</span><p>${esc(where)}</p>${picks ? `<ul class="machine__picks">${picks}</ul>` : '<p class="readout">Nothing in the catalog fits comfortably; the smallest models below may still run slowly.</p>'}<p class="readout">Estimates. Models marked too big are greyed out; you can still download them.</p></div>`;
+  return `<div class="well well--pad machine"><span class="label">For this machine</span><p>${esc(where)}</p>${picks ? `<ul class="machine__picks">${picks}</ul>` : '<p class="readout">Nothing in the catalog fits comfortably; the smallest models below may still run slowly.</p>'}<p class="readout">Estimates. Models marked too big are greyed out; you can still download them.</p></div>`;
 }
 function catalogIds() { return new Set((state.store?.catalog || []).map((e) => e.id)); }
 async function removeModel(id) {
@@ -1192,8 +1242,8 @@ async function loadSettings() {
   $('recall').setAttribute('aria-checked', String(state.settings.recall));
   renderSearchPanel();
   $('recall-note').textContent = state.settings.embedding_installed
-    ? 'related questions from your other conversations are added to the model\'s context'
-    : 'needs Qwen3 Embedding 0.6B: download it in models below';
+    ? 'Related questions from your other conversations are added to the model\'s context'
+    : 'Needs Qwen3 Embedding 0.6B: download it in Models below';
   renderStorage();
 }
 function renderStorage() {
@@ -1206,14 +1256,14 @@ function renderSearchPanel() {
   const settings = state.settings;
   if (!settings) return;
   const key = settings.keenable || {};
-  $('search-engine').textContent = `engine · ${settings.web_search.toLowerCase()}`;
+  $('search-engine').textContent = `Engine · ${settings.web_search}`;
   const panel = $('search-panel');
   if (key.source === 'env') {
     panel.innerHTML = `<p>Using the Keenable key from <span class="readout">.env</span> (<span class="readout">${esc(key.hint || '')}</span>): 100,000 searches a month.</p>`;
     return;
   }
   if (key.source === 'settings') {
-    panel.innerHTML = `<div class="row row--wrap"><p class="grow">Using your Keenable key <span class="readout">${esc(key.hint || '')}</span>: 100,000 searches a month.</p><button class="btn btn--ghost btn--xs" id="keenable-remove" type="button">remove</button></div>`;
+    panel.innerHTML = `<div class="row row--wrap"><p class="grow">Using your Keenable key <span class="readout">${esc(key.hint || '')}</span>: 100,000 searches a month.</p><button class="btn btn--ghost btn--xs" id="keenable-remove" type="button">Remove</button></div>`;
     $('keenable-remove').onclick = () => saveKeenableKey('');
     return;
   }
@@ -1225,8 +1275,8 @@ function renderSearchPanel() {
     </ol>
     <form class="row row--wrap" id="keenable-form" autocomplete="off">
       <label class="visually-hidden" for="keenable-key">Keenable API key</label>
-      <input class="field grow" id="keenable-key" type="password" placeholder="paste your Keenable API key" spellcheck="false" autocomplete="off">
-      <button class="btn btn--primary btn--xs">save key</button>
+      <input class="field grow" id="keenable-key" type="password" placeholder="Paste your Keenable API key" spellcheck="false" autocomplete="off">
+      <button class="btn btn--primary btn--xs">Save key</button>
     </form>`;
   $('keenable-form').onsubmit = (event) => { event.preventDefault(); saveKeenableKey($('keenable-key').value.trim()); };
 }
@@ -1266,8 +1316,9 @@ function bind() {
   $('rail-close').onclick = closeRail;
   $('scrim').onclick = closeRail;
   window.addEventListener('hashchange', () => { setView(location.hash.slice(1), false); openFromHash(); });
-  $('theme-toggle').onclick = () => { const next = document.documentElement.dataset.theme === 'day' ? 'night' : 'day'; store.set('theme', next); applyTheme(next); };
-  window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', (event) => { if (!store.get('theme')) applyTheme(event.matches ? 'day' : 'night'); });
+  $('theme-toggle').onclick = () => setThemeMode(THEME_MODES[(THEME_MODES.indexOf(themeMode()) + 1) % THEME_MODES.length]);
+  for (const button of $('theme-mode').querySelectorAll('[data-theme-mode]')) button.onclick = () => setThemeMode(button.dataset.themeMode);
+  window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', () => { if (themeMode() === 'system') applyTheme('system'); });
 
   $('composer').onsubmit = send;
   $('prompt').addEventListener('keydown', (event) => {
@@ -1300,6 +1351,9 @@ function bind() {
   for (const button of $('effort').querySelectorAll('[data-effort]')) button.onclick = () => { state.effort = button.dataset.effort; store.set('effort', state.effort); renderPicker(); if ($('chat-log').querySelector('.hero')) showHero(); };
   for (const button of $('temperature').querySelectorAll('[data-temperature]')) button.onclick = () => { state.temperature = button.dataset.temperature; store.set('temperature', state.temperature); renderPicker(); };
   for (const button of $('agent-effort').querySelectorAll('[data-effort]')) button.onclick = () => { state.agentEffort = button.dataset.effort; setRadio($('agent-effort'), state.agentEffort, 'effort'); };
+  $('agent-attach-button').onclick = () => $('agent-file').click();
+  $('agent-file').onchange = () => attachAgentDoc($('agent-file').files[0]);
+  $('agent-attach-clear').onclick = () => { state.agentDoc = null; renderAgentDoc(); };
   $('agent-thinking').onclick = () => { state.agentThinking = !state.agentThinking; $('agent-thinking').setAttribute('aria-checked', String(state.agentThinking)); };
 
   document.addEventListener('keydown', (event) => {
@@ -1307,7 +1361,7 @@ function bind() {
       if (state.busy) { stop(); return; }
       closeRail(); closePicker();
     }
-    if (event.altKey && !event.metaKey && !event.ctrlKey && /^Digit[1-8]$/.test(event.code)) { event.preventDefault(); setView(VIEWS[Number(event.code.slice(5)) - 1]); }
+    if (event.altKey && !event.metaKey && !event.ctrlKey && /^Digit[1-9]$/.test(event.code)) { event.preventDefault(); setView(VIEWS[Number(event.code.slice(5)) - 1]); }
     if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'o') { event.preventDefault(); newChat(); }
     if (event.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) && state.view === 'chat') { event.preventDefault(); $('prompt').focus(); }
   });
@@ -1337,7 +1391,7 @@ function bind() {
       $('image-prompt').value = result.enhanced;
       if (result.by && result.by !== 'rules') toast(`Rewritten by ${shortModel(result.by)}`);
     } catch (error) { fail(error); }
-    finally { button.disabled = false; button.textContent = 'refine prompt'; }
+    finally { button.disabled = false; button.textContent = 'Refine prompt'; }
   };
   for (const button of $('aspect').querySelectorAll('[data-aspect]')) button.onclick = () => { if (state.imageBusy) return; state.aspect = button.dataset.aspect; setRadio($('aspect'), state.aspect, 'aspect'); };
   for (const button of $('image-model').querySelectorAll('[data-image-model]')) button.onclick = () => { if (state.imageBusy) return; state.imageModel = button.dataset.imageModel; store.set('imageModel', state.imageModel); renderImageModels(); };
@@ -1363,7 +1417,7 @@ function bind() {
 }
 
 async function init() {
-  applyTheme(initialTheme());
+  applyTheme();
   bind();
   setRadio($('agent-effort'), state.agentEffort, 'effort');
   showHero();

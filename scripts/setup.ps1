@@ -14,7 +14,7 @@ param([switch]$Desktop)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest is far faster without it
 
-$LlamaTag = if ($env:LLAMA_TAG) { $env:LLAMA_TAG } else { 'b12032' }
+$LlamaTag = if ($env:LLAMA_TAG) { $env:LLAMA_TAG } else { 'b12623' }
 $SdTag = if ($env:SD_TAG) { $env:SD_TAG } else { 'master-1039-290148d' }
 $SdCommit = $SdTag.Split('-')[-1]
 $Root = Split-Path -Parent $PSScriptRoot

@@ -9,11 +9,12 @@
 | **Chat** | streaming answers, thinking and effort controls, photos and PDFs read on-device, web search with cited sources, recall of related earlier questions |
 | **Code** | an agent for a project folder: reads, searches, edits and runs your build, with every edit as a diff you approve, commands that ask first, undo per run, a real terminal, semantic code search and read-only access to library source |
 | **Agents** | draft → review → final answer, each stage on its own model |
+| **Assistant** | standing jobs that research the web on a schedule (say, your stocks every weekday morning) and leave a cited report; it suggests, you decide |
 | **Images** | Z-Image-Turbo and FLUX.2 Klein through stable-diffusion.cpp; edit by describing the change |
 | **Video** | LTX-2.3 clips from text or a picture, with sound, and continue-from-last-frame for longer scenes |
 | **Documents** | text from photos, scans and PDFs with Apple Vision |
 
-Under the hood: an **Actix Web** server manages `llama-server` (llama.cpp), `sd-cli` (stable-diffusion.cpp) and the LTX video build for you, renders one **Tera** page, and keeps history in SQLite. Fonts and assets are served locally: no Node build, no CDN, no network calls at runtime. A **Tauri** app wraps it as a native desktop app (macOS; it also builds for Windows and Linux). The interface uses the Lumen theme from Hallmark.
+Under the hood: an **Actix Web** server manages `llama-server` (llama.cpp), `sd-cli` (stable-diffusion.cpp) and the LTX video build for you, renders one **Tera** page, and keeps history in SQLite. Fonts and assets are served locally: no Node build, no CDN, no network calls at runtime. A **Tauri** app wraps it as a native desktop app (macOS; it also builds for Windows and Linux). The interface uses the Console theme from Hallmark (Host Grotesk and Atkinson Hyperlegible Mono, served locally), in Light, Dark or System appearance from Settings.
 
 **Runs on:** Apple Silicon Macs (macOS 15+) from 16 GB, best at 32–64 GB; Linux and Windows PCs with an NVIDIA, AMD or Intel GPU, or CPU only (new, untested on real hardware). The setup script installs Rust and everything else; the app suggests models that fit your machine. Video needs a Mac with 32 GB+ and Xcode.
 
@@ -55,7 +56,9 @@ The scripts pin the tested engine versions (override with `LLAMA_TAG` and `SD_TA
 
 Go to **Settings → Models**. Ferro64 reads your memory and GPU and marks every model: **fits**, **slow here** (it runs partly in system memory, or needs the Mac GPU limit raised), or **too big** (greyed out; you can still download it). A panel at the top names the best fit per job:
 
-**Ferro64 is meant to be useful on an ordinary 16 GB laptop, and quality comes before speed,** so **Qwen3.5 9B** is the default for chat, web search, agents and small coding tasks on every machine. Our tests ran on an M1 Max, so expect a laptop without a strong GPU to be much slower. With more memory you can download bigger models from the same list: Qwen3.5 or Qwen3.6 35B-A3B on 32–64 GB gives more knowledge at good speed, and if one is installed, Ferro64 prefers it. Machines with under 16 GB can try it, but it may not fit.
+**Ferro64 is meant to be useful on an ordinary 16 GB laptop, and quality comes before speed,** so **Qwen3.5 9B** is the default for chat, web search, agents and small coding tasks on every machine. Our tests ran on an M1 Max, so expect a laptop without a strong GPU to be much slower. With more memory you can download bigger models from the same list: Qwen3.6 35B-A3B on 32–64 GB gives more knowledge at good speed, and if it is installed, Ferro64 prefers it. For coding, Inkling-2-Mini and Devstral Small 2 are the strongest picks.
+
+For teams that cannot use Chinese-made models, the catalog has non-Qwen choices for every job: Inkling-2-Mini and Devstral for code, Gemma 4 and Nemotron 3 Nano for chat, agents and review, and FLUX.1 schnell, SD 3.5 Large Turbo and SDXL for images (their prompts are read by Google's T5 and OpenAI's CLIP, which download with them). Machines with under 16 GB can try it, but it may not fit.
 
 `ferro64 --hardware` prints the same report in a terminal (the setup scripts show it). To see what another machine would get, set `FERRO64_HARDWARE`, for example `FERRO64_HARDWARE=mac:16` or `FERRO64_HARDWARE=nvidia:4:16` (GPU GB, then system GB; a name can follow, as in `mac:16:Apple M2`). On GPUs with less than 12 GB the context window defaults to 8k so small models' caches fit; set `LLAMACPP_CTX_SIZE` to change it. The Qwen3.5 9B and 4B picks are from the same family as the tested 35B, but have not been benchmarked here yet.
 
@@ -133,6 +136,24 @@ With **Qwen3 Embedding 0.6B** downloaded (Settings → Models, 639 MB), the agen
 ## Recall and embeddings
 
 The same embedding model runs in its own small `llama-server` (about 1 GB) beside the chat model, starting on first use and stopping after 10 idle minutes. Besides code search, it powers **recall** (Settings, on by default): when you ask something, related questions from your *other* conversations are added to the model's context as background. Only close matches are used (cosine similarity above 0.55); unrelated questions bring nothing. Every new message is embedded as it is saved, and past messages are indexed once in the background after the model is downloaded. The embedding server's log is `data/embed-server.log`.
+
+## Assistant
+
+The assistant view is a personal agent for standing jobs: "every weekday at 7:30, research my watchlist and tell me what to consider buying, holding or avoiding", or "every Monday, summarize what changed in local AI models". Press **new job**, start from the stock research template or write your own, and pick when it runs: weekdays, every day, or only when you press **run now**.
+
+Each run works on its own with the local model, using four read-only tools: **web search**, **read page**, **stock quote** and **price history** (US stocks and ETFs, from Nasdaq's public quote data, which needs no key but is unofficial and may be delayed). Price changes, highs and lows and moving averages are calculated by Ferro64, not by the model, and the model is told to state no figure that a tool did not give it. The report cites its sources as numbered links; a report that cites nothing is sent back once to add citations. Every search and page it read is listed under the report.
+
+**It cannot act.** There is no brokerage, email or file tool, so it can't buy, sell or send anything. Picks appear as cards with the price when the report was written. Mark each one **bought**, **sold**, **passed** or **watching**, with an optional note. **Your decisions** keeps that log and, with **check prices now**, shows how each pick moved since. The next run sees its previous report and your decisions with their notes, so it knows what you hold and what you turned down. Reports are research, not financial advice: check the sources before you act.
+
+**Lists as CSV.** Turn on **save a table as csv** and name the columns (or start from the **daily list as csv** template, such as 10 doctors a day in two cities). The model ends its report with the table; Ferro64 checks it, drops rows an earlier run already saved (matched on the first two columns, ignoring case and punctuation), and writes `data/assistant/<job>/<date>.csv` plus `all.csv` with every row so far. If the model repeats rows, it is asked once to find replacements. Fields come only from pages it read; it is told to leave a field empty rather than guess. Fields that a spreadsheet would run as formulas are neutralized on export. Pages built by JavaScript, as many directories are, are read in a headless Chrome, Edge or Brave already on the machine, with a throwaway profile.
+
+**Notes and reminders.** The assistant can keep a few short notes per job for its next runs ("hospital sites work better than directories"). They are listed in the job's settings, where you can delete them. It can also suggest a calendar reminder, such as rechecking a stock after earnings; **add to calendar** downloads an .ics file that your calendar asks you to confirm. Nothing is added on its own.
+
+**Reports on your phone.** Under **reports on your phone**, paste a Telegram bot token from @BotFather, send the bot "hi", and pick your chat. Each finished report, and its CSV, is then sent there. Ferro64 sends it after the run; the assistant has no tool to message anyone, and the chat is the only destination. The token is kept in Ferro64's database and requests go to api.telegram.org.
+
+**Reports by email.** Under **reports by email**, pick Gmail, iCloud Mail, Outlook.com, Proton Mail (through its Bridge app on this Mac) or another server such as a work relay, and enter your address, an app password from your provider (not your normal password) and who to send to, up to 10 addresses. Each finished report then arrives with its picks, every source and any CSV attached. Ferro64 sends it after the run, from your account, only to those addresses; the assistant cannot send mail itself. The app password is kept in Ferro64's database and sent only to your mail server, encrypted.
+
+Jobs run while Ferro64 is open. A run missed while the Mac slept starts when it wakes, the same day. A new job whose time has passed today first runs on the next scheduled day. One run happens at a time, and on macOS a notification says when a report is ready. A tool-calling model is needed (Qwen3.5 / 3.6, Devstral and others); it uses the best one installed unless the job names one. Web searches go out as described under **Web**, and quote lookups go to api.nasdaq.com.
 
 ## One model at a time, kept warm
 

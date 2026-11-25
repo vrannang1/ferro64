@@ -25,21 +25,21 @@ function vendorRow(v) {
   return `<div class="well well--pad" data-vendor="${esc(v.id)}">
     <div class="row row--wrap"><strong class="grow">${esc(v.name)}</strong>
       <span class="readout">${v.key_source ? `${source} ${esc(v.key_hint || '')}` : 'no key'}</span>
-      ${v.keys_url ? `<a class="readout" href="${esc(v.keys_url)}" target="_blank" rel="noopener noreferrer">get a key</a>` : ''}</div>
-    ${v.id === 'custom' ? `<div class="row row--wrap"><input class="field grow" data-url placeholder="https://… ending before /chat/completions" value="${esc(v.url || '')}" spellcheck="false" aria-label="Custom address"><button class="btn btn--ghost btn--xs" data-save-url>save address</button></div>` : ''}
+      ${v.keys_url ? `<a class="readout" href="${esc(v.keys_url)}" target="_blank" rel="noopener noreferrer">Get a key</a>` : ''}</div>
+    ${v.id === 'custom' ? `<div class="row row--wrap"><input class="field grow" data-url placeholder="https://… ending before /chat/completions" value="${esc(v.url || '')}" spellcheck="false" aria-label="Custom address"><button class="btn btn--ghost btn--xs" data-save-url>Save address</button></div>` : ''}
     <form class="row row--wrap" data-key-form autocomplete="off">
       <input class="field grow" type="password" data-key placeholder="paste the ${esc(v.name)} API key" spellcheck="false" autocomplete="off" aria-label="${esc(v.name)} API key">
-      <button class="btn btn--ghost btn--xs">save key</button>
-      ${v.key_source === 'saved' ? '<button type="button" class="btn btn--ghost btn--xs" data-remove-key>remove key</button>' : ''}
-      ${v.key_source ? '<button type="button" class="btn btn--ghost btn--xs" data-find>check key · list models</button>' : ''}
+      <button class="btn btn--ghost btn--xs">Save key</button>
+      ${v.key_source === 'saved' ? '<button type="button" class="btn btn--ghost btn--xs" data-remove-key>Remove key</button>' : ''}
+      ${v.key_source ? '<button type="button" class="btn btn--ghost btn--xs" data-find>Check key · list models</button>' : ''}
     </form>
     ${v.key_source ? `<form class="row row--wrap" data-add-form>
       <input class="field grow" data-add list="models-${esc(v.id)}" placeholder="model name, as the vendor writes it" spellcheck="false" aria-label="Model to add">
       <datalist id="models-${esc(v.id)}">${found.map((m) => `<option value="${esc(m)}"></option>`).join('')}</datalist>
-      <button class="btn btn--ghost btn--xs">add model</button>
+      <button class="btn btn--ghost btn--xs">Add model</button>
       ${found.length ? `<span class="readout">${found.length} available</span>` : ''}
     </form>
-    <div class="row row--wrap">${v.models.map((m) => `<button class="btn btn--ghost btn--xs" data-drop="${esc(m)}" title="Remove">${esc(m)} ×</button>`).join('') || '<span class="readout">no models added yet</span>'}</div>` : ''}
+    <div class="row row--wrap">${v.models.map((m) => `<button class="btn btn--ghost btn--xs" data-drop="${esc(m)}" title="Remove">${esc(m)} ×</button>`).join('') || '<span class="readout">No models added yet</span>'}</div>` : ''}
   </div>`;
 }
 
@@ -48,8 +48,8 @@ function renderHosted() {
   $('hosted-limit').value = hosted.token_limit;
   $('hosted-vendors').innerHTML = hosted.vendors.map(vendorRow).join('');
   $('hosted-proxy').innerHTML = `
-    <div class="row row--wrap"><span class="label">base url</span><code class="grow">${esc(url)}</code></div>
-    <div class="row row--wrap"><span class="label">api key</span><code class="grow">${esc(hosted.proxy_token || 'only shown on this machine')}</code></div>
+    <div class="row row--wrap"><span class="label">Base URL</span><code class="grow">${esc(url)}</code></div>
+    <div class="row row--wrap"><span class="label">API key</span><code class="grow">${esc(hosted.proxy_token || 'only shown on this machine')}</code></div>
     <p class="readout">Point any OpenAI-style tool here. The model name picks the vendor, such as <code>api:novita:some/model</code>, or a local one such as <code>qwen3.6:35b-a3b</code>. It answers this machine only. The run limit below does not cover it, so check the vendor's own usage page.</p>`;
   for (const row of document.querySelectorAll('[data-vendor]')) {
     const id = row.dataset.vendor;
